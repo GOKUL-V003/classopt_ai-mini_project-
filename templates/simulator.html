@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+
+{% block title %}What-If Simulator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <h2>What-If Scenario Simulator</h2>
+            <span class="badge badge-simulation"><i class="fa-solid fa-flask"></i> Simulation Engine</span>
+        </div>
+        <p>Stress-test college operations: Test hypothetical classroom closures, attendance surges, and extra batch additions without altering real data.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+            <i class="fa-solid fa-chart-pie"></i> View Analytics Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Simulation Notice Banner -->
+<div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+    <i class="fa-solid fa-circle-info" style="color: #9333ea; font-size: 1.1rem;"></i>
+    <p style="font-size: 0.85rem; color: #581c87;">
+        <strong>Simulation Disclaimer:</strong> All calculations performed on this page represent hypothetical simulations. Results are strictly tagged as <strong>Simulation Result</strong> to keep them separate from verified historical college records.
+    </p>
+</div>
+
+<div class="grid-2">
+    <!-- Simulation Scenario Control Panel -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-sliders" style="color: #9333ea;"></i> Configure Simulation Scenario</h3>
+            <span class="badge badge-simulation">Simulation Input</span>
+        </div>
+        <form onsubmit="runSimulator(event)">
+            <div class="form-group">
+                <label class="form-label">Select What-If Scenario</label>
+                <select id="sim-scenario" class="form-select" onchange="toggleScenarioInputs()">
+                    <option value="room_closed">Scenario 1: Classroom Maintenance / Closure</option>
+                    <option value="attendance_surge">Scenario 2: Sudden Attendance Surge (+20% to +35%)</option>
+                    <option value="shortage">Scenario 3: Severe Classroom Shortage (Multiple Rooms Shut)</option>
+                </select>
+            </div>
+
+            <!-- Closed Rooms Selection (for Scenario 1 & 3) -->
+            <div id="closed-rooms-section" class="form-group">
+                <label class="form-label">Select Classroom(s) Marked As Unavailable:</label>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; background: #f8fafc; padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                    {% for r in rooms %}
+                    <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.84rem; cursor: pointer;">
+                        <input type="checkbox" class="closed-room-checkbox" value="{{ r.room_id }}" {% if r.room_id == 'R202' %}checked{% endif %}>
+                        <strong>{{ r.room_id }}</strong> ({{ r.capacity }}s)
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Attendance Surge Slider (for Scenario 2) -->
+            <div id="surge-section" class="form-group">
+                <label class="form-label">Attendance Surge Multiplier</label>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <input type="range" id="sim-surge" min="0" max="50" step="5" value="20" style="flex: 1;" oninput="document.getElementById('surge-val').innerText = '+' + this.value + '%'">
+                    <span id="surge-val" class="badge badge-warning" style="font-size: 0.9rem; padding: 0.35rem 0.65rem;">+20%</span>
+                </div>
+                <small style="color: var(--text-muted); font-size: 0.78rem; display: block; margin-top: 0.35rem;">
+                    Simulates campus guest lectures, pre-exam review turnout, or elective seminars.
+                </small>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; background: #7e22ce; border-color: #6b21a8;">
+                <i class="fa-solid fa-play"></i> Execute Scenario Simulation
+            </button>
+        </form>
+    </div>
+
+    <!-- Simulation Comparison Metrics (Before vs After) -->
+    <div>
+        <div id="sim-results-card" class="card" style="display: none; border-top: 4px solid #9333ea;">
+            <div class="card-header">
+                <div>
+                    <span class="badge badge-simulation" style="margin-bottom: 0.3rem;">Simulation Result</span>
+                    <h3 style="color: #581c87;">Scenario Impact Analysis</h3>
+                </div>
+                <div>
+                    <span id="sim-reallocated-count" class="badge badge-warning" style="font-size: 0.82rem;">--</span>
+                </div>
+            </div>
+
+            <div class="comparison-container">
+                <!-- Before Simulation -->
+                <div class="comparison-panel panel-before">
+                    <div class="comparison-title"><i class="fa-solid fa-clock-rotate-left"></i> Before Simulation</div>
+                    <div class="stat-row"><span>Classrooms Used:</span> <strong id="sim-before-rooms">--</strong></div>
+                    <div class="stat-row"><span>Active Conflicts:</span> <strong id="sim-before-conflicts" style="color: #b91c1c;">--</strong></div>
+                    <div class="stat-row"><span>Avg Room Utilization:</span> <strong id="sim-before-util">--</strong></div>
+                </div>
+
+                <!-- After Simulation -->
+                <div class="comparison-panel panel-after">
+                    <div class="comparison-title"><i class="fa-solid fa-circle-check"></i> Simulation Result (After)</div>
+                    <div class="stat-row"><span>Classrooms Used:</span> <strong id="sim-after-rooms">--</strong></div>
+                    <div class="stat-row"><span>Active Conflicts:</span> <strong id="sim-after-conflicts" style="color: #15803d;">--</strong></div>
+                    <div class="stat-row"><span>Avg Room Utilization:</span> <strong id="sim-after-util" style="color: #15803d;">--</strong></div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.25rem; font-size: 0.85rem; color: #6b21a8; background: #faf5ff; padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid #e9d5ff;">
+                <i class="fa-solid fa-lightbulb"></i> <strong>Simulation Insight:</strong> The optimizer re-routed classes from unavailable or overflowing rooms into best-fit alternative spaces while preventing secondary conflicts.
+            </div>
+        </div>
+
+        <div id="sim-placeholder" class="card" style="text-align: center; padding: 3rem 1.5rem; background: #ffffff;">
+            <div style="width: 56px; height: 56px; margin: 0 auto 1rem; border-radius: 50%; background: #f3e8ff; color: #9333ea; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                <i class="fa-solid fa-flask"></i>
+            </div>
+            <h4 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Ready to Run Simulation</h4>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); max-width: 380px; margin: 0.5rem auto 0;">
+                Select a scenario and click Execute to see dynamic re-allocations and utilization improvements.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Reallocated Sessions Simulation Table -->
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <div>
+            <h3><i class="fa-solid fa-shuffle" style="color: #9333ea;"></i> Simulated Session Re-Allocations</h3>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                Shows which classes had to be shifted during the simulation run and the reasoning behind each move.
+            </p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Subject & Dept</th>
+                    <th>Period</th>
+                    <th>Students (Before &rarr; Sim)</th>
+                    <th>Room Before</th>
+                    <th>Simulated Room</th>
+                    <th>Simulation Reason</th>
+                </tr>
+            </thead>
+            <tbody id="sim-sessions-tbody">
+                <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                        Run a simulation scenario above to populate reallocated session records.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleScenarioInputs() {
+        const scenario = document.getElementById('sim-scenario').value;
+        const closedSec = document.getElementById('closed-rooms-section');
+        const surgeSec = document.getElementById('surge-section');
+
+        if (scenario === 'attendance_surge') {
+            closedSec.style.display = 'none';
+            surgeSec.style.display = 'block';
+        } else {
+            closedSec.style.display = 'block';
+            surgeSec.style.display = 'block';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Run default simulation on load
+        runSimulator();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends "layout.html" %}
+
+{% block title %}Student Attendance Prediction{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Student Attendance Count Prediction</h2>
+        <p>Uses trained Machine Learning (Linear Regression & Random Forest) to forecast student turnout before classes start.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('optimizer') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-sliders"></i> Go to Optimizer
+        </a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Prediction Form -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-calculator" style="color: var(--primary);"></i> Class Attendance Inputs</h3>
+            <span class="badge badge-primary">Model Parameters</span>
+        </div>
+        <form onsubmit="runPrediction(event)">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Department</label>
+                    <select id="pred-dept" class="form-select" required>
+                        <option value="CSE" selected>CSE - Computer Science</option>
+                        <option value="AIDS">AIDS - AI & Data Science</option>
+                        <option value="IT">IT - Information Technology</option>
+                        <option value="ECE">ECE - Electronics & Comm.</option>
+                        <option value="EEE">EEE - Electrical Eng.</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Year & Section</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="pred-year" class="form-select">
+                            <option value="3" selected>3rd Year</option>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="4">4th Year</option>
+                        </select>
+                        <select id="pred-sec" class="form-select">
+                            <option value="A" selected>Sec A</option>
+                            <option value="B">Sec B</option>
+                            <option value="C">Sec C</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Subject Title</label>
+                <input type="text" id="pred-subject" class="form-control" value="Artificial Intelligence & Machine Learning" required>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Day of Week</label>
+                    <select id="pred-day" class="form-select">
+                        <option value="Monday" selected>Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Time Slot / Period</label>
+                    <select id="pred-slot" class="form-select">
+                        <option value="P1">P1 (09:00 - 10:00)</option>
+                        <option value="P2" selected>P2 (10:00 - 11:00)</option>
+                        <option value="P3">P3 (11:15 - 12:15)</option>
+                        <option value="P4">P4 (12:15 - 01:15)</option>
+                        <option value="P5">P5 (02:00 - 03:00)</option>
+                        <option value="P6">P6 (03:00 - 04:00)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Historical Turnout (%)</label>
+                    <input type="number" id="pred-history" class="form-control" value="82.5" min="40" max="100" step="0.5">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Exam Proximity</label>
+                    <select id="pred-exam" class="form-select">
+                        <option value="0" selected>0 - Normal Semester Week</option>
+                        <option value="1">1 - Mid-Term / Test Approaching</option>
+                        <option value="2">2 - Final Exam Review Week</option>
+                    </select>
+                </div>
+            </div>
+
+            <input type="hidden" id="pred-week" value="10">
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.75rem;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Predict Expected Attendance
+            </button>
+        </form>
+    </div>
+
+    <!-- Prediction Results Display -->
+    <div>
+        <div id="pred-result-card" class="card" style="display: none; border-top: 4px solid var(--success);">
+            <div class="card-header">
+                <h3><i class="fa-solid fa-bullseye" style="color: var(--success);"></i> Prediction Results</h3>
+                <span class="badge badge-success">ML Output</span>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 1.5rem;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
+                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #166534;">Predicted Students</span>
+                    <div id="pred-count" style="font-size: 2.2rem; font-weight: 800; color: #15803d; margin-top: 0.25rem;">
+                        --
+                    </div>
+                    <small style="color: #16a34a;">Expected actual attendees</small>
+                </div>
+
+                <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
+                    <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #3730a3;">Recommended Min Capacity</span>
+                    <div id="pred-capacity" style="font-size: 2.2rem; font-weight: 800; color: #4338ca; margin-top: 0.25rem;">
+                        --
+                    </div>
+                    <small id="pred-buffer" style="color: #6366f1;">Includes safety buffer</small>
+                </div>
+            </div>
+
+            <!-- Explainability Factors -->
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
+                <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">
+                    <i class="fa-solid fa-magnifying-glass-chart" style="color: var(--primary);"></i> Key Influencing Factors:
+                </h4>
+                <ul id="pred-factors" style="padding-left: 1.2rem; font-size: 0.84rem; color: var(--text-secondary); line-height: 1.7;">
+                    <!-- Injected dynamically via script.js -->
+                </ul>
+            </div>
+
+            <div style="text-align: center;">
+                <button type="button" class="btn btn-success" onclick="goToOptimizerWithPrediction()" style="width: 100%; padding: 0.75rem;">
+                    <i class="fa-solid fa-arrow-right"></i> Optimize Classroom for this Prediction
+                </button>
+            </div>
+        </div>
+
+        <!-- Academic Info Card -->
+        <div class="card" style="background: #fafafa;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">
+                <i class="fa-solid fa-graduation-cap"></i> Machine Learning Architecture (Viva Guide)
+            </h4>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                <strong>Algorithm:</strong> Linear Regression pipeline paired with Scikit-learn OneHotEncoder for categorical attributes (Department, Day, Period).<br>
+                <strong>Evaluation Metrics:</strong> Model tested using Mean Absolute Error (MAE: ~5.3 students) and Root Mean Squared Error (RMSE: ~9.3 students).<br>
+                <strong>Safety Buffer:</strong> College best practice allocates a +10% capacity cushion to prevent unexpected overcrowding.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

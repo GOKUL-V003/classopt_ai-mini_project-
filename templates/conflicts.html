@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+
+{% block title %}Conflict Detection & Resolution{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Schedule & Resource Conflict Detection</h2>
+        <p>Automated scanner detecting double bookings, overcrowded rooms, faculty clashes, and missing lab equipment.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('optimizer') }}" class="btn btn-primary">
+            <i class="fa-solid fa-sliders"></i> Open Optimizer
+        </a>
+    </div>
+</div>
+
+<!-- Conflicts Overview Cards -->
+<div class="grid-4" style="margin-bottom: 1.5rem;">
+    <div class="kpi-card danger">
+        <div class="kpi-label">Active Conflicts</div>
+        <div class="kpi-value">{{ counts.total if counts is defined else (conflicts|length if conflicts else 0) }}</div>
+        <div class="kpi-subtext">Detected in timetable</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Capacity Deficits</div>
+        <div class="kpi-value">{{ counts.capacity if counts is defined else 0 }}</div>
+        <div class="kpi-subtext">Students &gt; Seats</div>
+    </div>
+    <div class="kpi-card warning">
+        <div class="kpi-label">Room Double Bookings</div>
+        <div class="kpi-value">{{ counts.room if counts is defined else 0 }}</div>
+        <div class="kpi-subtext">Same room collision</div>
+    </div>
+    <div class="kpi-card accent">
+        <div class="kpi-label">Faculty &amp; Lab Clashes</div>
+        <div class="kpi-value">{{ counts.faculty_resource if counts is defined else 0 }}</div>
+        <div class="kpi-subtext">Resource mismatches</div>
+    </div>
+</div>
+
+<!-- Conflict Cards List -->
+{% if conflicts %}
+<div style="display: flex; flex-direction: column; gap: 1.25rem;">
+    {% for c in conflicts %}
+    <div class="card {{ c.card_class if c.card_class is defined else 'card-conflict-medium' }}">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.8rem;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                    <span class="badge {{ c.badge_class if c.badge_class is defined else 'badge-warning' }}">
+                        {{ c.type }}
+                    </span>
+                    <span style="font-size: 0.82rem; color: var(--text-muted);">
+                        <i class="fa-solid fa-calendar-day"></i> {{ c.date }} • {{ c.time_slot }}
+                    </span>
+                </div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">
+                    {{ c.title }}
+                </h3>
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.3rem;">
+                    {{ c.details }}
+                </p>
+            </div>
+
+            <div>
+                <a href="{{ url_for('optimizer') }}" class="btn btn-outline" style="font-size: 0.82rem;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Resolve with Optimizer
+                </a>
+            </div>
+        </div>
+
+        <!-- Suggested Alternative Rooms -->
+        {% if c.suggested_rooms %}
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">
+                Suggested Alternative Rooms:
+            </span>
+            {% for r in c.suggested_rooms %}
+            <span class="badge badge-primary" style="font-size: 0.78rem;">
+                <i class="fa-solid fa-door-open"></i> {{ r }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 3rem 1.5rem; background: #ffffff;">
+    <div style="width: 56px; height: 56px; margin: 0 auto 1rem; border-radius: 50%; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+        <i class="fa-solid fa-circle-check"></i>
+    </div>
+    <h4 style="font-size: 1.15rem; font-weight: 700; color: #065f46;">Zero Timetable Conflicts Detected!</h4>
+    <p style="font-size: 0.88rem; color: var(--text-secondary); max-width: 400px; margin: 0.5rem auto 0;">
+        All scheduled classes fit within classroom capacities, and no room or instructor double-bookings were found.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

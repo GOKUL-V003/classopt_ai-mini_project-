@@ -1,0 +1,184 @@
+{% extends "layout.html" %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Classroom Resource Analytics Dashboard</h2>
+        <p>Interactive KPIs and occupancy patterns across college departments, time slots, and physical rooms.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('optimizer') }}" class="btn btn-primary">
+            <i class="fa-solid fa-sliders"></i> Open Resource Optimizer
+        </a>
+    </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="card" style="padding: 1rem 1.25rem; margin-bottom: 1.5rem; background: #ffffff;">
+    <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 160px;">
+            <label class="form-label" style="font-size: 0.78rem; text-transform: uppercase;">Department</label>
+            <select id="filter-dept" class="form-select" onchange="loadDashboardData()">
+                <option value="All">All Departments</option>
+                {% for d in departments %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 1; min-width: 160px;">
+            <label class="form-label" style="font-size: 0.78rem; text-transform: uppercase;">Classroom / Hall</label>
+            <select id="filter-room" class="form-select" onchange="loadDashboardData()">
+                <option value="All">All Classrooms</option>
+                {% for r in rooms %}
+                <option value="{{ r }}">{{ r }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 1; min-width: 160px;">
+            <label class="form-label" style="font-size: 0.78rem; text-transform: uppercase;">Time Slot / Period</label>
+            <select id="filter-slot" class="form-select" onchange="loadDashboardData()">
+                <option value="All">All Periods (P1-P8)</option>
+                {% for s in time_slots %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <button class="btn btn-secondary" onclick="loadDashboardData()" style="padding: 0.58rem 1rem;">
+                <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Stat Cards -->
+<div class="grid-6" style="margin-bottom: 1.75rem;">
+    <div class="kpi-card accent">
+        <div class="kpi-label">Total Rooms</div>
+        <div class="kpi-value" id="kpi-total-rooms">--</div>
+        <div class="kpi-subtext">Active college spaces</div>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-label">Total Classes</div>
+        <div class="kpi-value" id="kpi-total-classes">--</div>
+        <div class="kpi-subtext">Classroom sessions</div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-label">Avg Occupancy</div>
+        <div class="kpi-value" id="kpi-avg-occupancy">--%</div>
+        <div class="kpi-subtext">Students / Capacity</div>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-label">Room Utilization</div>
+        <div class="kpi-value" id="kpi-avg-utilization">--%</div>
+        <div class="kpi-subtext">Used / Avail Hours</div>
+    </div>
+
+    <div class="kpi-card warning">
+        <div class="kpi-label">Underutilized</div>
+        <div class="kpi-value" id="kpi-underutilized">--</div>
+        <div class="kpi-subtext">&lt; 50% room occupancy</div>
+    </div>
+
+    <div class="kpi-card danger">
+        <div class="kpi-label">Overcapacity</div>
+        <div class="kpi-value" id="kpi-overcapacity">--</div>
+        <div class="kpi-subtext">Students &gt; Capacity</div>
+    </div>
+</div>
+
+<!-- Formula Reference Banner (Viva Friendly) -->
+<div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1.5rem; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem; font-size: 0.84rem; color: var(--text-secondary);">
+    <div>
+        <strong>Occupancy % Formula:</strong> <code>(actual_students / room_capacity) * 100</code>
+    </div>
+    <div>
+        <strong>Room Utilization Formula:</strong> <code>(used_hours / available_hours) * 100</code>
+    </div>
+</div>
+
+<!-- 6 Interactive Dashboard Charts -->
+<div class="grid-2">
+    <!-- Chart 1: Room Occupancy -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-chart-column" style="color: var(--primary);"></i> 1. Room-wise Occupancy %</h3>
+            <span class="badge badge-primary">Seat Utilization</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-room-occupancy"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 2: Expected vs Actual Students -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-chart-line" style="color: var(--success);"></i> 2. Expected vs Actual Students</h3>
+            <span class="badge badge-success">Attendance Gap</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-expected-actual"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 3: Department-wise Occupancy -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-chart-pie" style="color: var(--accent);"></i> 3. Department-wise Occupancy</h3>
+            <span class="badge badge-primary">Dept Comparison</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-department-occupancy"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 4: Daily Occupancy Trend -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-arrow-trend-up" style="color: #6366f1;"></i> 4. Daily Occupancy Trend</h3>
+            <span class="badge badge-primary">Time Series</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-daily-trend"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 5: Time-slot Analysis -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-clock" style="color: var(--warning);"></i> 5. Time-slot / Period Analysis</h3>
+            <span class="badge badge-warning">Peak Hours</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-timeslot"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 6: Room Utilization -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-bars-progress" style="color: #8b5cf6;"></i> 6. Room Utilization Ranking</h3>
+            <span class="badge badge-primary">Ranked Usage</span>
+        </div>
+        <div style="height: 280px; position: relative;">
+            <canvas id="chart-room-utilization"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDashboardData();
+    });
+</script>
+{% endblock %}

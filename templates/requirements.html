@@ -1,0 +1,147 @@
+{% extends "layout.html" %}
+
+{% block title %}Data Requirements & Templates{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Data Schemas & Template Downloads</h2>
+        <p>Understand the structure of inputs required by the AI Classroom Resource Optimizer.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Proceed to Upload
+        </a>
+    </div>
+</div>
+
+<!-- Downloadable Sample Datasets Banner -->
+<div class="card" style="background: linear-gradient(135deg, #1e1b4b, #312e81); color: #ffffff;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #ffffff;">
+                <i class="fa-solid fa-file-excel" style="color: #34d399; margin-right: 0.5rem;"></i>
+                Download Ready-to-Use Templates
+            </h3>
+            <p style="font-size: 0.9rem; color: #c7d2fe; margin-top: 0.25rem;">
+                Download pre-formatted Excel (.xlsx) and CSV (.csv) sample files populated with realistic college data.
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="{{ url_for('download_sample', file_type='classrooms_excel') }}" class="btn btn-secondary" style="font-size: 0.82rem;">
+                <i class="fa-solid fa-download"></i> Classrooms (.xlsx)
+            </a>
+            <a href="{{ url_for('download_sample', file_type='timetable_excel') }}" class="btn btn-secondary" style="font-size: 0.82rem;">
+                <i class="fa-solid fa-download"></i> Timetable (.xlsx)
+            </a>
+            <a href="{{ url_for('download_sample', file_type='attendance_excel') }}" class="btn btn-secondary" style="font-size: 0.82rem;">
+                <i class="fa-solid fa-download"></i> Attendance (.xlsx)
+            </a>
+            <a href="{{ url_for('download_sample', file_type='smart_dataset') }}" class="btn btn-success" style="font-size: 0.82rem;">
+                <i class="fa-solid fa-database"></i> Full 5,000 Dataset (.xlsx)
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 3 Main Schemas Explained -->
+<div class="grid-3">
+
+    <!-- 1. Classroom Data -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-door-open" style="color: var(--primary);"></i> 1. Classroom Data</h3>
+            <span class="badge badge-primary">Physical Assets</span>
+        </div>
+        <p style="font-size: 0.86rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Contains details about each classroom, lecture hall, and lab on campus.
+        </p>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr><th>Column</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>room_id</code></td><td>Unique identifier (e.g. R101, B204)</td></tr>
+                    <tr><td><code>building</code></td><td>Block name (e.g. Academic Block A)</td></tr>
+                    <tr><td><code>floor</code></td><td>Floor number (1, 2, 3)</td></tr>
+                    <tr><td><code>capacity</code></td><td>Maximum seats available (e.g. 75)</td></tr>
+                    <tr><td><code>room_type</code></td><td>Classroom, Seminar Hall, Lab</td></tr>
+                    <tr><td><code>projector_available</code></td><td>Yes or No</td></tr>
+                    <tr><td><code>lab_available</code></td><td>Yes or No (computers/desks)</td></tr>
+                    <tr><td><code>available</code></td><td>Operational status (Yes/No)</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 2. Timetable Schedule Data -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-calendar-week" style="color: var(--accent);"></i> 2. Timetable Data</h3>
+            <span class="badge badge-primary">Schedule</span>
+        </div>
+        <p style="font-size: 0.86rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Maps classes, faculty, departments, and time periods to rooms.
+        </p>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr><th>Column</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>date</code></td><td>Date of the class (YYYY-MM-DD)</td></tr>
+                    <tr><td><code>day</code></td><td>Monday, Tuesday, Wednesday...</td></tr>
+                    <tr><td><code>time_slot</code></td><td>Period (e.g. P1: 09:00-10:00)</td></tr>
+                    <tr><td><code>department</code></td><td>CSE, AIDS, IT, ECE, EEE</td></tr>
+                    <tr><td><code>year</code></td><td>Student batch (1, 2, 3, 4)</td></tr>
+                    <tr><td><code>section</code></td><td>A, B, C</td></tr>
+                    <tr><td><code>subject</code></td><td>Course title / Subject name</td></tr>
+                    <tr><td><code>faculty</code></td><td>Assigned professor / instructor</td></tr>
+                    <tr><td><code>room_id</code></td><td>Currently scheduled classroom</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 3. Attendance Data -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-users" style="color: var(--success);"></i> 3. Attendance Data</h3>
+            <span class="badge badge-success">Actual Usage</span>
+        </div>
+        <p style="font-size: 0.86rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Records actual student turnout versus registered students.
+        </p>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr><th>Column</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>date</code></td><td>Session date</td></tr>
+                    <tr><td><code>department</code></td><td>Department</td></tr>
+                    <tr><td><code>year</code></td><td>Student Year</td></tr>
+                    <tr><td><code>section</code></td><td>Section</td></tr>
+                    <tr><td><code>subject</code></td><td>Course title</td></tr>
+                    <tr><td><code>expected_students</code></td><td>Total registered students (e.g. 70)</td></tr>
+                    <tr><td><code>actual_students</code></td><td>Actual attendees present (e.g. 58)</td></tr>
+                    <tr><td><code>room_id</code></td><td>Room where class was conducted</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Privacy & Missing Data Notice -->
+<div class="card" style="border-left: 4px solid var(--accent); background: #f0f9ff;">
+    <h4 style="font-size: 0.98rem; font-weight: 700; color: #0369a1; margin-bottom: 0.4rem;">
+        <i class="fa-solid fa-shield-halved"></i> Data Privacy & Partial Uploads
+    </h4>
+    <p style="font-size: 0.88rem; color: #0c4a6e;">
+        <strong>Privacy Protected:</strong> Student names, register numbers, and personal details are strictly excluded. The system relies entirely on aggregated section attendance counts.<br>
+        <strong>Partial Data Support:</strong> If attendance or timetable data is partially missing, the system automatically uses standard median values and allows uploading individual files without breaking.
+    </p>
+</div>
+{% endblock %}

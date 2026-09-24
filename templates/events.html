@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+
+{% block title %}College Event Predictor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>College Event Attendance & Hall Allocator</h2>
+        <p>Estimate expected student attendance for campus events, seminars, and symposiums, and identify best-fit halls.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('conflicts') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-triangle-exclamation"></i> Check Schedule Conflicts
+        </a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Event Planning Form -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-calendar-plus" style="color: var(--primary);"></i> Event Parameters</h3>
+            <span class="badge badge-primary">Venue Booking</span>
+        </div>
+        <form onsubmit="runEventPrediction(event)">
+            <div class="form-group">
+                <label class="form-label">Event Name</label>
+                <input type="text" id="evt-name" class="form-control" value="AI & Cloud Computing Symposium 2026" required>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label class="form-label">Event Type</label>
+                    <select id="evt-type" class="form-select" onchange="updateBenchmarkTurnout()">
+                        <option value="Technical Symposium" selected>Technical Symposium (80% turnout)</option>
+                        <option value="Workshop">Hands-on Workshop (85% turnout)</option>
+                        <option value="Guest Lecture">Industry Guest Lecture (75% turnout)</option>
+                        <option value="Cultural Fest">Cultural Fest / Showcase (90% turnout)</option>
+                        <option value="Department Seminar">Department Seminar (70% turnout)</option>
+                        <option value="Hackathon">Coding Hackathon (88% turnout)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Event Date</label>
+                    <input type="date" id="evt-date" class="form-control" value="2026-10-15" required>
+                </div>
+            </div>
+
+            <div class="grid-3">
+                <div class="form-group">
+                    <label class="form-label">Registrations</label>
+                    <input type="number" id="evt-registrations" class="form-control" value="130" min="10" max="500" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Historical Turnout (%)</label>
+                    <input type="number" id="evt-turnout" class="form-control" value="80" min="40" max="100">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Duration (Hrs)</label>
+                    <input type="number" id="evt-duration" class="form-control" value="3" min="1" max="8">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; margin-top: 0.5rem;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Predict Turnout & Allocate Venue
+            </button>
+        </form>
+    </div>
+
+    <!-- Prediction & Recommended Venue Display -->
+    <div>
+        <div id="evt-results-card" class="card" style="display: none; border-top: 4px solid var(--accent);">
+            <div class="card-header">
+                <div>
+                    <span class="badge badge-primary" style="margin-bottom: 0.35rem;">Venue Allocation Result</span>
+                    <h3 id="evt-venue-name" style="color: var(--accent);">--</h3>
+                    <p id="evt-venue-details" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">--</p>
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 1.25rem;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.15rem; text-align: center;">
+                    <span style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: #166534;">Predicted Attendees</span>
+                    <div id="evt-predicted-attendees" style="font-size: 2rem; font-weight: 800; color: #15803d; margin-top: 0.25rem;">--</div>
+                </div>
+
+                <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius-md); padding: 1.15rem; text-align: center;">
+                    <span style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: #3730a3;">Required Minimum Seats</span>
+                    <div id="evt-min-capacity" style="font-size: 2rem; font-weight: 800; color: #4338ca; margin-top: 0.25rem;">--</div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+                <i class="fa-solid fa-circle-check" style="color: var(--success); margin-right: 0.35rem;"></i>
+                <span id="evt-explanation">--</span>
+            </div>
+        </div>
+
+        <div id="evt-placeholder" class="card" style="text-align: center; padding: 3rem 1.5rem; background: #ffffff;">
+            <div style="width: 56px; height: 56px; margin: 0 auto 1rem; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                <i class="fa-solid fa-calendar-check"></i>
+            </div>
+            <h4 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">Event Venue Optimization</h4>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); max-width: 380px; margin: 0.5rem auto 0;">
+                Input registration counts to determine realistic expected turnout and suggest the best lecture hall or seminar venue.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Scheduled College Events Table -->
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h3><i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Scheduled College Events</h3>
+        <span class="badge badge-success">Master Calendar</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Event Name</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Registrations</th>
+                    <th>Expected Attendance</th>
+                    <th>Allocated Venue</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in events %}
+                <tr>
+                    <td><strong>{{ e.event_name }}</strong></td>
+                    <td>{{ e.event_type }}</td>
+                    <td>{{ e.date }}</td>
+                    <td>{{ e.registration_count }} students</td>
+                    <td><strong>{{ e.predicted_attendance }}</strong> seats</td>
+                    <td><span class="badge badge-primary">{{ e.allocated_room_id }}</span></td>
+                    <td><span class="badge badge-success">{{ e.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateBenchmarkTurnout() {
+        const type = document.getElementById('evt-type').value;
+        const benchmarks = {
+            'Technical Symposium': 80,
+            'Workshop': 85,
+            'Guest Lecture': 75,
+            'Cultural Fest': 90,
+            'Department Seminar': 70,
+            'Hackathon': 88
+        };
+        if (benchmarks[type]) {
+            document.getElementById('evt-turnout').value = benchmarks[type];
+        }
+    }
+</script>
+{% endblock %}

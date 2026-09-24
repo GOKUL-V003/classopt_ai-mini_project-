@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI Classroom Resource Optimizer{% endblock %} | College Project</title>
+    <!-- Modern Typography & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for interactive visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom Design System -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Top Navigation Bar -->
+    <nav class="navbar">
+        <a href="{{ url_for('index') }}" class="nav-brand">
+            <div class="brand-icon">
+                <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="brand-text">
+                <h1>ClassOpt AI</h1>
+                <span class="brand-badge">B.Tech Project 2026</span>
+            </div>
+        </a>
+
+        <ul class="nav-links">
+            <li><a href="{{ url_for('upload') }}" class="{% if request.endpoint == 'upload' %}active{% endif %}"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</a></li>
+            <li><a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}"><i class="fa-solid fa-chart-pie"></i> Analytics</a></li>
+            <li><a href="{{ url_for('prediction') }}" class="{% if request.endpoint == 'prediction' %}active{% endif %}"><i class="fa-solid fa-brain"></i> Attendance ML</a></li>
+            <li><a href="{{ url_for('optimizer') }}" class="{% if request.endpoint == 'optimizer' %}active{% endif %}"><i class="fa-solid fa-sliders"></i> Optimizer</a></li>
+            <li><a href="{{ url_for('simulator') }}" class="{% if request.endpoint == 'simulator' %}active{% endif %}"><i class="fa-solid fa-flask"></i> Simulator</a></li>
+            <li><a href="{{ url_for('events') }}" class="{% if request.endpoint == 'events' %}active{% endif %}"><i class="fa-solid fa-calendar-days"></i> Events</a></li>
+            <li><a href="{{ url_for('conflicts') }}" class="{% if request.endpoint == 'conflicts' %}active{% endif %}"><i class="fa-solid fa-triangle-exclamation"></i> Conflicts</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content Wrapper -->
+    <main class="main-wrapper">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div style="margin-bottom: 1.5rem;">
+                    {% for category, message in messages %}
+                        {% if category == 'success' %}
+                            <div class="alert-box alert-success">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span>{{ message }}</span>
+                            </div>
+                        {% elif category == 'danger' %}
+                            <div class="alert-box alert-danger">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                                <span>{{ message }}</span>
+                            </div>
+                        {% else %}
+                            <div class="alert-box alert-warning">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span>{{ message }}</span>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Floating AI Assistant Button (Bottom Right) -->
+    <button id="fab-ai-toggle" class="fab-ai-btn" title="Open AI Resource Assistant" aria-label="Open AI Resource Assistant">
+        <span class="fab-pulse"></span>
+        <i class="fa-solid fa-robot" style="font-size: 1.45rem;"></i>
+    </button>
+
+    <!-- Floating AI Assistant Drawer / Pop-up -->
+    <div id="ai-assistant-drawer" class="ai-modal-drawer" style="display: none;">
+        <div class="ai-drawer-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="ai-drawer-avatar">AI</div>
+                <div>
+                    <h4 class="ai-drawer-title">Campus Resource Copilot</h4>
+                    <p class="ai-drawer-subtitle">
+                        <span class="ai-status-dot"></span> Active &amp; Ready
+                    </p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" id="ai-drawer-close" class="ai-close-btn" title="Close Assistant">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="ai-chat-body" id="ai-chat-body">
+            <div class="ai-msg-row ai-msg-row-assistant">
+                <div class="ai-msg-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div class="ai-msg-bubble ai-msg-bubble-assistant">
+                    <strong>👋 Hello! I am your AI Campus Resource Copilot.</strong><br><br>
+                    Ask me anything about classroom allocations, timetable conflicts, capacity optimization, ML predictions, formulas, or viva defense questions!<br><br>
+                    <span style="font-size: 11px; color: #64748b;">Click any quick topic below for an instant answer:</span>
+                </div>
+            </div>
+
+            <!-- Quick Suggestion Chips -->
+            <div class="ai-quick-chips" id="ai-quick-chips">
+                <button type="button" class="ai-chip" data-query="What is this project overview?">🏫 Project Overview</button>
+                <button type="button" class="ai-chip" data-query="What are the key formulas for occupancy and utilization?">📐 Formulas</button>
+                <button type="button" class="ai-chip" data-query="How does the 6-constraint scoring algorithm work?">⚙️ Scoring Algorithm</button>
+                <button type="button" class="ai-chip" data-query="Top viva defense questions and answers?">🎓 Viva Questions</button>
+                <button type="button" class="ai-chip" data-query="Explain the ML prediction model and metrics">🤖 Attendance ML</button>
+                <button type="button" class="ai-chip" data-query="How does the conflict detection scanner work?">⚠️ Conflicts Scanner</button>
+            </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="ai-chat-form" class="ai-chat-input-area">
+            <input type="text" id="ai-chat-input" class="ai-chat-input" placeholder="Ask AI Copilot about classroom optimization..." autocomplete="off">
+            <button type="submit" class="ai-send-btn" id="ai-send-btn" title="Send message">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </form>
+    </div>
+
+    <!-- Project Footer -->
+    <footer class="footer">
+        <p><strong>ClassOpt AI — Classroom Resource Optimization System</strong> • Academic Year 2025–2026</p>
+        <p style="margin-top: 0.35rem; font-size: 0.8rem;">
+            Designed for College Project Presentation & Viva Defense • Built with Python, Flask, Pandas, SQLite & Scikit-learn
+        </p>
+    </footer>
+
+    <!-- App Scripts -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

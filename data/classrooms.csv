@@ -1,0 +1,10 @@
+room_id,building,floor,capacity,room_type,projector_available,lab_available,available
+R101,Academic Block A,1,30,Small Classroom,Yes,No,Yes
+R102,Academic Block A,1,40,Classroom,Yes,No,Yes
+R103,Academic Block A,1,50,Classroom,Yes,No,Yes
+R104,Academic Block A,1,60,Classroom,Yes,No,Yes
+R105,Academic Block A,1,75,Classroom,Yes,No,Yes
+R201,Academic Block B,2,90,Classroom,Yes,Yes,Yes
+R202,Academic Block B,2,100,Seminar Hall,Yes,No,Yes
+R203,Academic Block B,2,120,Lecture Hall,Yes,No,Yes
+R204,Academic Block B,2,150,Lecture Hall,Yes,No,Yes

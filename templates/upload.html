@@ -1,0 +1,173 @@
+{% extends "layout.html" %}
+
+{% block title %}Data Upload & Cleaning{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Data Upload & Cleaning Pipeline</h2>
+        <p>Upload your college Excel or CSV dataset, inspect structure, and execute transparent Pandas cleaning.</p>
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="{{ url_for('download_sample', file_type='classrooms_excel') }}" class="btn btn-secondary" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-download"></i> Classrooms (.xlsx)
+        </a>
+        <a href="{{ url_for('download_sample', file_type='timetable_excel') }}" class="btn btn-secondary" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-download"></i> Timetable (.xlsx)
+        </a>
+        <a href="{{ url_for('download_sample', file_type='attendance_excel') }}" class="btn btn-secondary" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-download"></i> Attendance (.xlsx)
+        </a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Upload Box -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-file-import" style="color: var(--primary);"></i> Upload College Dataset</h3>
+            <span class="badge badge-primary">Excel or CSV</span>
+        </div>
+        <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="form-label">Select Dataset File (.xlsx, .csv)</label>
+                <input type="file" name="dataset_file" class="form-control" accept=".csv, .xlsx, .xls" required>
+                <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">
+                    Accepts Classroom master, Timetable schedule, or Attendance logs.
+                </small>
+            </div>
+            <div style="display: flex; gap: 0.75rem;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-upload"></i> Upload & Inspect
+                </button>
+            </div>
+        </form>
+
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.6rem;">
+                Don't have a custom file handy right now?
+            </p>
+            <div>
+                <a href="{{ url_for('reset_demo') }}" class="btn btn-secondary" style="font-size: 0.84rem; width: 100%; text-align: center;">
+                    <i class="fa-solid fa-rotate-left"></i> Reset to Pre-Loaded 5,000 Records College Dataset
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- How Cleaning Works (Educational for Viva) -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent);"></i> How Data Cleaning Works</h3>
+            <span class="badge badge-success">Pandas Steps</span>
+        </div>
+        <ul style="padding-left: 1.2rem; font-size: 0.86rem; color: var(--text-secondary); line-height: 1.8;">
+            <li><strong>Step 1:</strong> <code>df.drop_duplicates()</code> eliminates duplicate timetables or attendance rows.</li>
+            <li><strong>Step 2:</strong> <code>pd.to_datetime()</code> standardizes date formats to <code>YYYY-MM-DD</code>.</li>
+            <li><strong>Step 3:</strong> Median imputation <code>fillna(df[col].median())</code> fills missing numeric attendance or capacities safely without skew.</li>
+            <li><strong>Step 4:</strong> Categorical mode imputation fills missing subjects or departments.</li>
+            <li><strong>Step 5:</strong> Capacity and attendance bounds validation (clipping negative or impossible numbers).</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Uploaded File Inspection Results -->
+{% if summary %}
+<div class="card" style="border-top: 4px solid var(--primary);">
+    <div class="card-header">
+        <div>
+            <h3>Dataset Inspection: <code>{{ summary.filename }}</code></h3>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                {% if summary.cleaned %}
+                    <span class="badge badge-success"><i class="fa-solid fa-check"></i> Cleaned & Validated</span>
+                {% else %}
+                    <span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Raw / Uncleaned</span>
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            {% if not summary.cleaned %}
+            <form action="{{ url_for('clean_data') }}" method="POST">
+                <button type="submit" class="btn btn-success">
+                    <i class="fa-solid fa-broom"></i> Clean Data
+                </button>
+            </form>
+            {% else %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                <i class="fa-solid fa-arrow-right"></i> Proceed to Dashboard
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Metadata Stat Cards -->
+    <div class="grid-4" style="margin-bottom: 1.5rem;">
+        <div class="kpi-card accent">
+            <div class="kpi-label">Total Records</div>
+            <div class="kpi-value">{{ summary.inspection.total_rows }}</div>
+            <div class="kpi-subtext">Rows in dataset</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Columns</div>
+            <div class="kpi-value">{{ summary.inspection.total_cols }}</div>
+            <div class="kpi-subtext">Features detected</div>
+        </div>
+        <div class="kpi-card {% if summary.inspection.missing_values > 0 %}warning{% else %}success{% endif %}">
+            <div class="kpi-label">Missing Values</div>
+            <div class="kpi-value">{{ summary.inspection.missing_values }}</div>
+            <div class="kpi-subtext">Null / NaN cells</div>
+        </div>
+        <div class="kpi-card {% if summary.inspection.duplicate_rows > 0 %}danger{% else %}success{% endif %}">
+            <div class="kpi-label">Duplicate Rows</div>
+            <div class="kpi-value">{{ summary.inspection.duplicate_rows }}</div>
+            <div class="kpi-subtext">Identical records</div>
+        </div>
+    </div>
+
+    <!-- Columns and Data Types Table -->
+    <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem;">Columns & Data Types</h4>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Column Name</th>
+                    <th>Data Type</th>
+                    <th>Missing Values</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for col in summary.inspection.columns %}
+                <tr>
+                    <td><strong>{{ col }}</strong></td>
+                    <td><code>{{ summary.inspection.dtypes.get(col, 'Unknown') }}</code></td>
+                    <td>{{ summary.inspection.missing_by_col.get(col, 0) }}</td>
+                    <td>
+                        {% if summary.inspection.missing_by_col.get(col, 0) == 0 %}
+                            <span class="badge badge-success">Complete</span>
+                        {% else %}
+                            <span class="badge badge-warning">Needs Imputation</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Cleaning Steps Log -->
+    {% if summary.cleaned and summary.steps %}
+    <div style="margin-top: 1.5rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.25rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: #166534; margin-bottom: 0.5rem;">
+            <i class="fa-solid fa-clipboard-check"></i> Cleaning Steps Executed Successfully:
+        </h4>
+        <ul style="padding-left: 1.2rem; font-size: 0.86rem; color: #15803d; line-height: 1.7;">
+            {% for step in summary.steps %}
+            <li>{{ step }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block title %}AI Resource Assistant{% endblock %}
+
+{% block content %}
+<div style="text-align: center; margin: 1.5rem 0 2rem;">
+    <span class="badge badge-primary" style="margin-bottom: 0.75rem; font-size: 0.8rem; padding: 0.35rem 0.85rem;">
+        <i class="fa-solid fa-sparkles"></i> College Resource Intelligence System
+    </span>
+    <h1 style="font-size: 2.6rem; font-weight: 800; color: #0f172a; letter-spacing: -0.03em;">
+        AI Classroom Resource Optimizer
+    </h1>
+    <p style="font-size: 1.2rem; color: #475569; font-weight: 500; margin-top: 0.4rem;">
+        Predict. Analyze. Optimize.
+    </p>
+</div>
+
+<!-- Conversational AI Assistant Interface -->
+<div class="assistant-box">
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+        <div style="width: 42px; height: 42px; border-radius: 50%; background: #4f46e5; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+            <i class="fa-solid fa-robot"></i>
+        </div>
+        <div>
+            <h3 style="font-size: 1.05rem; font-weight: 700;">Campus Resource Copilot</h3>
+            <p style="font-size: 0.8rem; color: #059669; font-weight: 600;">
+                <i class="fa-solid fa-circle" style="font-size: 0.55rem;"></i> Active & Ready for Optimization
+            </p>
+        </div>
+    </div>
+
+    <!-- Conversational dialogue -->
+    <div class="chat-bubble chat-user">
+        <p><strong>You:</strong> "I want to optimize classroom resources for our college departments."</p>
+    </div>
+
+    <div class="chat-bubble chat-system">
+        <p><strong>AI Assistant:</strong> "Sure! I can help you analyze classroom occupancy, predict upcoming student attendance, eliminate double bookings and overcrowding, and autonomously allocate rooms with minimum wasted capacity."</p>
+        <p style="margin-top: 0.6rem; font-size: 0.88rem; color: var(--text-secondary);">
+            To get started, we need three simple tables: <strong>Classroom Details</strong>, <strong>Timetable Schedule</strong>, and <strong>Attendance Records</strong>. You can use our preloaded 5,000-session college dataset or upload your own files.
+        </p>
+    </div>
+
+    <!-- Main Call to Action -->
+    <div style="text-align: center; margin-top: 1.8rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+        <button type="button" onclick="openAIAssistant()" class="btn btn-primary" style="padding: 0.85rem 1.8rem; font-size: 1rem; cursor: pointer;">
+            <i class="fa-solid fa-robot"></i> Open AI Copilot
+        </button>
+        <a href="{{ url_for('upload') }}" class="btn btn-outline" style="padding: 0.85rem 1.6rem; font-size: 1rem;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Dataset
+        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="padding: 0.85rem 1.6rem; font-size: 1rem;">
+            <i class="fa-solid fa-chart-line"></i> View Live Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Step-by-Step Project Pipeline -->
+<div style="margin-top: 3.5rem;">
+    <h3 style="text-align: center; font-size: 1.25rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--text-primary);">
+        <i class="fa-solid fa-diagram-project" style="color: var(--primary); margin-right: 0.4rem;"></i>
+        Complete Data Analytics & Optimization Pipeline
+    </h3>
+
+    <div class="grid-4">
+        <div class="card" style="text-align: center;">
+            <div style="width: 45px; height: 45px; margin: 0 auto 0.8rem; border-radius: 10px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                1
+            </div>
+            <h4 style="font-size: 1rem; font-weight: 700;">Data Ingestion</h4>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                Inspect Excel/CSV, identify duplicates, missing values, and validate capacities.
+            </p>
+            <a href="{{ url_for('upload') }}" class="btn btn-outline" style="margin-top: 0.8rem; width: 100%; font-size: 0.8rem;">
+                Upload
+            </a>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <div style="width: 45px; height: 45px; margin: 0 auto 0.8rem; border-radius: 10px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                2
+            </div>
+            <h4 style="font-size: 1rem; font-weight: 700;">Occupancy Analytics</h4>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                Track average room occupancy, room utilization %, and detect underutilized rooms.
+            </p>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline" style="margin-top: 0.8rem; width: 100%; font-size: 0.8rem;">
+                Open Dashboard
+            </a>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <div style="width: 45px; height: 45px; margin: 0 auto 0.8rem; border-radius: 10px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                3
+            </div>
+            <h4 style="font-size: 1rem; font-weight: 700;">Attendance ML</h4>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                Predict actual student attendance with Scikit-learn Linear Regression model.
+            </p>
+            <a href="{{ url_for('prediction') }}" class="btn btn-outline" style="margin-top: 0.8rem; width: 100%; font-size: 0.8rem;">
+                Run Predictor
+            </a>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <div style="width: 45px; height: 45px; margin: 0 auto 0.8rem; border-radius: 10px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                4
+            </div>
+            <h4 style="font-size: 1rem; font-weight: 700;">Resource Optimizer</h4>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                Autonomous multi-constraint scoring algorithm to minimize wasted seats.
+            </p>
+            <a href="{{ url_for('optimizer') }}" class="btn btn-outline" style="margin-top: 0.8rem; width: 100%; font-size: 0.8rem;">
+                Optimize Rooms
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
