@@ -290,64 +290,57 @@ Our system continuously balances three competing campus priorities:
 
     const cleanKey = apiKey.trim();
 
-    // If API Key is present, call our server-side /api/chat endpoint
-    if (keySaved && cleanKey) {
-      try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: userText,
-            apiKey: cleanKey,
-          }),
-        });
+    try {
+      // Always call /api/chat to execute scheduling actions and save instructions to SQLite
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userText,
+          apiKey: cleanKey,
+        }),
+      });
 
-        const data = await res.json();
+      const data = await res.json();
 
-        if (data.success && data.answer) {
-          setActiveModel(data.model || 'Gemini');
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'assistant',
-              text: data.answer,
-              badge: `Gemini AI (${data.model || 'Live'})`,
-            },
-          ]);
-        } else {
-          // If Gemini API gave an error, inform the user cleanly and display Copilot answer
-          const offlineReply = generateOfflineResponse(userText);
-          const errDetail = data.error || 'Gemini service unreachable';
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'assistant',
-              text: `⚠️ **Gemini Notice**: ${errDetail}\n*(Note: For instant live responses, generate a free API key at [Google AI Studio](https://aistudio.google.com/app/apikey))*\n\n🤖 **SmartOccupy Copilot (Knowledge Engine)**:\n${offlineReply}`,
-            },
-          ]);
-        }
-      } catch (networkErr) {
-        const offlineReply = generateOfflineResponse(userText);
+      if (data && data.success && data.answer) {
+        if (data.model) setActiveModel(data.model);
+        const badgeLabel = data.action_executed
+          ? '💾 Saved to Database'
+          : data.model
+          ? `${data.model}`
+          : 'SmartOccupy Copilot';
+
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            text: `⚠️ **Network Notice**: ${networkErr.message}\n\n🤖 **SmartOccupy Copilot (Knowledge Engine)**:\n${offlineReply}`,
+            text: data.answer,
+            badge: badgeLabel,
           },
         ]);
-      }
-    } else {
-      // Local Smart Heuristics Fallback when no key is set
-      setTimeout(() => {
+      } else {
+        // Fallback to local Smart Knowledge Copilot Engine
         const offlineReply = generateOfflineResponse(userText);
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
             text: offlineReply,
+            badge: 'SmartOccupy Offline Copilot',
           },
         ]);
-      }, 300);
+      }
+    } catch (networkErr) {
+      const offlineReply = generateOfflineResponse(userText);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: offlineReply,
+          badge: 'SmartOccupy Offline Copilot',
+        },
+      ]);
     }
 
     setIsLoading(false);
@@ -572,6 +565,21 @@ Our system continuously balances three competing campus priorities:
 
           {/* Preset Quick Chips - Click directly sends the question! */}
           <div className="ai-chips-bar">
+            <button
+              onClick={() => sendPrompt('Schedule a meeting of prompt engineering')}
+              className="ai-chip-btn"
+              style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0', fontWeight: 'bold' }}
+              title="Schedule Prompt Engineering Meeting into SQLite Database"
+            >
+              📅 Schedule Prompt Engineering
+            </button>
+            <button
+              onClick={() => sendPrompt('View stored instruction logs')}
+              className="ai-chip-btn"
+              title="View instructions stored in database"
+            >
+              📋 View Instruction Logs
+            </button>
             <button
               onClick={() => sendPrompt('What does this project do?')}
               className="ai-chip-btn"

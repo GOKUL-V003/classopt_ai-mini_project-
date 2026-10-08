@@ -7,6 +7,8 @@ import sqlite3
 import os
 import pandas as pd
 
+import json
+
 DB_PATH = 'classroom_optimizer.db'
 
 def get_db_connection():
@@ -104,8 +106,58 @@ def init_db():
     )
     ''')
 
+    # 6. AI Chat Instructions & Action Logs table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ai_chat_instructions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        user_prompt TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        action_payload TEXT,
+        execution_status TEXT DEFAULT 'SUCCESS',
+        ai_response TEXT NOT NULL,
+        source TEXT DEFAULT 'SmartOccupy Copilot'
+    )
+    ''')
+
     conn.commit()
     conn.close()
+
+def log_ai_instruction(user_prompt, action_type, action_payload=None, execution_status='SUCCESS', ai_response='', source='SmartOccupy Copilot'):
+    """Logs an AI bot instruction, executed action, and response into SQLite."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    payload_str = json.dumps(action_payload) if isinstance(action_payload, (dict, list)) else str(action_payload or '')
+    cursor.execute('''
+    INSERT INTO ai_chat_instructions (user_prompt, action_type, action_payload, execution_status, ai_response, source)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_prompt, action_type, payload_str, execution_status, ai_response, source))
+    conn.commit()
+    inst_id = cursor.lastrowid
+    conn.close()
+    return inst_id
+
+def get_ai_instructions(limit=50):
+    """Retrieves recent AI instructions logged in the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ai_chat_instructions ORDER BY id DESC LIMIT ?", (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def insert_event(event_name, event_type, date, time_slot, registration_count, historical_turnout, predicted_attendance, allocated_room_id, status='Scheduled'):
+    """Inserts a new event/meeting directly into the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+    INSERT INTO events (event_name, event_type, date, time_slot, registration_count, historical_turnout, predicted_attendance, allocated_room_id, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (event_name, event_type, date, time_slot, registration_count, historical_turnout, predicted_attendance, allocated_room_id, status))
+    conn.commit()
+    event_id = cursor.lastrowid
+    conn.close()
+    return event_id
 
 def seed_demo_data_if_empty():
     """Populates the database from generated sample CSVs if tables are empty."""
@@ -214,16 +266,18 @@ def sync_dataset_to_db(df):
             col_map[col] = 'year'
         elif c in ['section', 'sec']:
             col_map[col] = 'section'
-        elif c in ['subject', 'course', 'subject_name', 'course_name']:
+        elif c in ['subject', 'course', 'subject_name', 'course_name', 'subject title']:
             col_map[col] = 'subject'
         elif c in ['faculty', 'professor', 'teacher', 'instructor']:
             col_map[col] = 'faculty'
-        elif c in ['expected_students', 'expected_student_count', 'class_size', 'enrolled_students', 'strength']:
+        elif c in ['expected_students', 'expected_student_count', 'class_size', 'enrolled_students', 'strength', 'expected students']:
             col_map[col] = 'expected_students'
-        elif c in ['actual_students', 'actual_student_count', 'attended_students', 'students_present', 'attendance_count']:
+        elif c in ['actual_students', 'actual_student_count', 'attended_students', 'students_present', 'attendance_count', 'present students', 'present_students', 'present']:
             col_map[col] = 'actual_students'
-        elif c in ['historical_attendance', 'historical_turnout', 'historical_rate']:
+        elif c in ['historical_attendance', 'historical_turnout', 'historical_rate', 'attendance %', 'attendance_percent', 'attendance percentage']:
             col_map[col] = 'historical_attendance'
+        elif c in ['occupancy %', 'occupancy_percent', 'occupancy percentage']:
+            col_map[col] = 'occupancy_percentage'
         elif c in ['exam_proximity', 'exam_flag', 'exams']:
             col_map[col] = 'exam_proximity'
 
@@ -284,6 +338,16 @@ def sync_dataset_to_db(df):
     # Synchronize attendance and timetable tables
     cursor.execute("DELETE FROM attendance")
     cursor.execute("DELETE FROM timetable")
+
+    # If section column is missing or all rows have identical values,
+    # automatically assign distinct sections (Sec A, Sec B, Sec C, Sec D)
+    # so parallel sessions running at the same period are clearly identified
+    # as distinct student batches/classes rather than showing the same single section
+    if 'section' not in norm_df.columns or norm_df['section'].nunique() <= 1:
+        sec_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+        norm_df['section'] = norm_df.groupby(['date', 'department', 'time_slot']).cumcount().apply(
+            lambda i: sec_letters[i] if i < len(sec_letters) else chr(65 + i)
+        )
 
     att_batch = []
     tt_batch = []

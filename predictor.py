@@ -89,10 +89,21 @@ def predict_students(department, day, time_slot, semester_week=10, historical_at
         2: 'Final review rush / peak attendance'
     }
 
+    PERIOD_TIME_MAP = {
+        'P1': '09:00 - 10:00',
+        'P2': '10:00 - 11:00',
+        'P3': '11:15 - 12:15',
+        'P4': '12:15 - 01:15',
+        'P5': '02:00 - 03:00',
+        'P6': '03:00 - 04:00',
+        'P7': '04:00 - 05:00',
+        'P8': '05:00 - 06:00'
+    }
+
     factors = [
         f"Department Baseline: {department} historical turnout rate is {historical_attendance}%",
         f"Day Effect: {day} ({day_effects.get(day, 'Standard weekday pattern')})",
-        f"Time Slot: Period {period} (Mid-day periods typically experience highest turnout)",
+        f"Time Slot: Period {period} ({PERIOD_TIME_MAP.get(period, 'Day slot')})",
         f"Exam Proximity: {exam_effects.get(int(exam_proximity), 'Normal')} "
     ]
 
@@ -100,5 +111,117 @@ def predict_students(department, day, time_slot, semester_week=10, historical_at
         'predicted_students': predicted,
         'recommended_min_capacity': recommended_capacity,
         'buffer_seats': buffer,
+        'period': period,
+        'time_slot': period,
+        'period_time': PERIOD_TIME_MAP.get(period, ''),
+        'period_display': f"Period {period} ({PERIOD_TIME_MAP.get(period, '')})",
         'factors': factors
     }
+
+def batch_predict_sessions(sessions):
+    """
+    Vectorized batch prediction for a list of session dictionaries.
+    Enriches each session with predicted_students, recommended_capacity, buffer_seats,
+    difference (predicted vs actual), and accuracy_percent.
+    """
+    if not sessions:
+        return []
+
+    model = get_model()
+    period_map = {
+        '09:00-10:00': 'P1',
+        '10:00-11:00': 'P2',
+        '11:15-12:15': 'P3',
+        '12:15-01:15': 'P4',
+        '02:00-03:00': 'P5',
+        '03:00-04:00': 'P6',
+        '04:00-05:00': 'P7',
+        '05:00-06:00': 'P8'
+    }
+
+    records = []
+    for s in sessions:
+        slot = str(s.get('time_slot', 'P1')).strip()
+        period = slot if slot.startswith('P') else period_map.get(slot, 'P1')
+        dept = str(s.get('department', 'CSE')).strip()
+        day = str(s.get('day', 'Monday')).strip()
+        try:
+            hist = float(s.get('historical_attendance', 80.0))
+        except (ValueError, TypeError):
+            hist = 80.0
+        try:
+            exam = int(s.get('exam_proximity', 0))
+        except (ValueError, TypeError):
+            exam = 0
+        try:
+            week = int(s.get('semester_week', 10))
+        except (ValueError, TypeError):
+            week = 10
+
+        records.append({
+            'Department': dept,
+            'Day': day,
+            'Period': period,
+            'Semester_Week': week,
+            'Historical_Attendance': hist,
+            'Exam_Proximity': exam
+        })
+
+    input_df = pd.DataFrame(records)
+
+    preds = []
+    if model is not None:
+        try:
+            raw_preds = model.predict(input_df)
+            preds = [max(15, min(140, int(round(p)))) for p in raw_preds]
+        except Exception as e:
+            print("[Predictor Warning] Batch model predict failed, fallback heuristic:", e)
+            for r in records:
+                preds.append(max(15, min(140, int(round(60 * (r['Historical_Attendance'] / 100.0))))))
+    else:
+        for r in records:
+            preds.append(max(15, min(140, int(round(65 * (r['Historical_Attendance'] / 100.0))))))
+
+    period_time_map = {
+        'P1': '09:00 - 10:00',
+        'P2': '10:00 - 11:00',
+        'P3': '11:15 - 12:15',
+        'P4': '12:15 - 01:15',
+        'P5': '02:00 - 03:00',
+        'P6': '03:00 - 04:00',
+        'P7': '04:00 - 05:00',
+        'P8': '05:00 - 06:00'
+    }
+
+    results = []
+    for s, pred in zip(sessions, preds):
+        item = dict(s)
+        slot = str(item.get('time_slot') or item.get('period') or 'P1').strip()
+        period = slot if slot.startswith('P') else period_map.get(slot, 'P1')
+        buffer = max(5, int(round(pred * 0.10)))
+        rec_cap = pred + buffer
+        item['predicted_students'] = pred
+        item['recommended_capacity'] = rec_cap
+        item['buffer_seats'] = buffer
+        item['period'] = period
+        item['time_slot'] = period
+        item['period_time'] = period_time_map.get(period, '')
+        item['period_display'] = f"Period {period}"
+        
+        act = item.get('actual_students')
+        if act is not None:
+            try:
+                act_int = int(act)
+                diff = pred - act_int
+                item['difference'] = diff
+                item['accuracy_percent'] = round(max(0.0, 100.0 - (abs(diff) / act_int * 100.0)), 1) if act_int > 0 else 100.0
+            except (ValueError, TypeError):
+                item['difference'] = None
+                item['accuracy_percent'] = None
+        else:
+            item['difference'] = None
+            item['accuracy_percent'] = None
+
+        results.append(item)
+
+    return results

@@ -5,8 +5,20 @@
 {% block content %}
 <div class="page-header">
     <div class="page-title">
-        <h2>Student Attendance Count Prediction</h2>
-        <p>Uses trained Machine Learning (Linear Regression & Random Forest) to forecast student turnout before classes start.</p>
+        <h2><i class="fa-solid fa-brain" style="color: var(--primary);"></i> Student Attendance Count Prediction</h2>
+        <p>Uses trained Machine Learning (Random Forest & Linear Regression) to forecast student turnout for future scheduled classes before classes start.</p>
+        <div style="margin-top: 0.5rem; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+            <span class="badge badge-success" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                <i class="fa-solid fa-calendar-week"></i> 🔮 1-Week Future Forecast Active: {{ future_week_count }} Classes ({{ start_date }} – {{ end_date }})
+            </span>
+            <span class="badge badge-primary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                <i class="fa-solid fa-database"></i> Database: {{ total_classes_count }} Records Loaded
+                {% if uploaded_filename %}({{ uploaded_filename }}){% endif %}
+            </span>
+            <span class="badge badge-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                <i class="fa-solid fa-check-double"></i> ML Random Forest Regressor Active
+            </span>
+        </div>
     </div>
     <div>
         <a href="{{ url_for('optimizer') }}" class="btn btn-secondary">
@@ -15,23 +27,287 @@
     </div>
 </div>
 
-<div class="grid-2">
+<!-- =========================================================================
+     UPCOMING 1-WEEK CLASS-WISE ATTENDANCE FORECAST TABLE (PRIMARY VIEW)
+     ========================================================================= -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <h3 style="margin-bottom: 0.25rem;">
+                <i class="fa-solid fa-calendar-check" style="color: var(--primary); margin-right: 0.4rem;"></i>
+                Upcoming 1-Week Attendance Forecast (Future Schedule)
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+                Showing forecasted student turnout for each class across the upcoming 1-week cycle ({{ start_date }} – {{ end_date }}).
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <span id="classes-count-badge" class="badge badge-primary">
+                Showing {{ classes|length }} of {{ future_week_count }} Classes (1-Week Future Schedule)
+            </span>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="exportAttendanceTableToCSV()">
+                <i class="fa-solid fa-file-arrow-down"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Interactive Filters Bar -->
+    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+            <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.25rem;">Schedule Window / Week</label>
+                <select id="table-filter-week" class="form-select form-select-sm" onchange="filterClasses(1)">
+                    <option value="future" selected>🔮 Upcoming 1 Week (Future: {{ start_date }} – {{ end_date }})</option>
+                    <option value="week1">📅 Week 1 (Oct 01 – Oct 08)</option>
+                    <option value="week2">📅 Week 2 (Oct 09 – Oct 15)</option>
+                    <option value="all">📅 All Weeks (Full Dataset: {{ total_classes_count }} Classes)</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.25rem;">Search Subject / Room</label>
+                <input type="text" id="table-search" class="form-control form-control-sm" placeholder="e.g. DBMS, English, ME202..." oninput="debounceFilterClasses()">
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.25rem;">Filter Department</label>
+                <select id="table-filter-dept" class="form-select form-select-sm" onchange="filterClasses(1)">
+                    <option value="All">All Departments</option>
+                    {% for d in departments %}
+                    <option value="{{ d }}">{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.25rem;">Filter Period</label>
+                <select id="table-filter-slot" class="form-select form-select-sm" onchange="filterClasses(1)">
+                    <option value="All">All Periods (P1 – P8)</option>
+                    {% for s in time_slots %}
+                    {% set t_time = period_time_map.get(s, '') if period_time_map else '' %}
+                    <option value="{{ s }}">Period {{ s }}{% if t_time %} ({{ t_time }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.25rem;">Filter Day</label>
+                <select id="table-filter-day" class="form-select form-select-sm" onchange="filterClasses(1)">
+                    <option value="All">All Days</option>
+                    {% for dy in days %}
+                    <option value="{{ dy }}">{{ dy }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Responsive Table -->
+    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+        <table class="table" id="attendance-ml-table">
+            <thead>
+                <tr style="position: sticky; top: 0; background: #ffffff; z-index: 2; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <th style="width: 50px; text-align: center;">#</th>
+                    <th>Class / Section</th>
+                    <th>Subject Name</th>
+                    <th style="text-align: center;">Period / Time Slot</th>
+                    <th>Day & Date</th>
+                    <th>Room</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center;">Predicted (Future Forecast)</th>
+                    <th style="text-align: center;">Actual / Benchmark</th>
+                    <th style="text-align: center;">Variance / Delta</th>
+                    <th style="text-align: center;">Rec. Capacity</th>
+                    <th style="text-align: center;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="attendance-table-body">
+                {% for c in classes %}
+                <tr id="row-{{ c.session_id }}">
+                    <td style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600;">
+                        {{ loop.index }}
+                    </td>
+                    <td>
+                        <strong>{{ c.department }}</strong>
+                        <span style="font-size: 0.78rem; color: var(--text-secondary); display: block;">
+                            Yr {{ c.year }} • Sec {{ c.section }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; color: var(--text-primary); font-size: 0.92rem;">
+                            {{ c.subject }}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge badge-primary" style="font-size: 0.82rem; font-weight: 700; display: inline-block;">
+                            Period {{ c.time_slot }}
+                        </span>
+                        <span style="font-size: 0.74rem; color: var(--text-secondary); display: block; margin-top: 3px; font-weight: 600;">
+                            {% if c.time_slot == 'P1' %}09:00 – 10:00
+                            {% elif c.time_slot == 'P2' %}10:00 – 11:00
+                            {% elif c.time_slot == 'P3' %}11:15 – 12:15
+                            {% elif c.time_slot == 'P4' %}12:15 – 01:15
+                            {% elif c.time_slot == 'P5' %}02:00 – 03:00
+                            {% elif c.time_slot == 'P6' %}03:00 – 04:00
+                            {% elif c.time_slot == 'P7' %}04:00 – 05:00
+                            {% elif c.time_slot == 'P8' %}05:00 – 06:00
+                            {% else %}{{ c.period_time or c.time_slot }}{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.85rem; font-weight: 600;">{{ c.day }}</span>
+                        {% if c.date %}
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">{{ c.date }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-secondary" style="font-family: monospace; font-size: 0.82rem;">
+                            {{ c.room_id }}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge badge-info" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                            <i class="fa-solid fa-clock"></i> Upcoming
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span style="font-size: 1.05rem; font-weight: 800; color: #16a34a;">
+                            {{ c.predicted_students }}
+                        </span>
+                        <span style="display: block; font-size: 0.72rem; color: #16a34a; font-weight: 600;">forecast</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span style="font-size: 1.05rem; font-weight: 800; color: #0284c7;">
+                            {{ c.actual_students if c.actual_students is not none else '—' }}
+                        </span>
+                        <span style="display: block; font-size: 0.72rem; color: var(--text-secondary);">baseline</span>
+                    </td>
+                    <td style="text-align: center;">
+                        {% if c.difference is not none %}
+                            {% if c.difference == 0 %}
+                                <span class="badge badge-success" style="font-size: 0.78rem;">Exact Match (0)</span>
+                            {% elif c.difference > 0 %}
+                                <span class="badge badge-primary" style="font-size: 0.78rem;">+{{ c.difference }} students</span>
+                            {% else %}
+                                <span class="badge badge-warning" style="font-size: 0.78rem;">{{ c.difference }} students</span>
+                            {% endif %}
+                            {% if c.accuracy_percent is not none %}
+                            <span style="display: block; font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">
+                                {{ c.accuracy_percent }}% match
+                            </span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: var(--text-secondary);">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <span style="font-weight: 700; color: #4338ca; font-size: 0.95rem;">
+                            {{ c.recommended_capacity }} seats
+                        </span>
+                        <span style="display: block; font-size: 0.72rem; color: var(--text-secondary);">
+                            (+{{ c.buffer_seats }} cushion)
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <div style="display: flex; gap: 0.35rem; justify-content: center;">
+                            <button type="button" class="btn btn-sm btn-outline-primary" title="Test this class in individual finder below"
+                                onclick='loadClassIntoForm({{ c|tojson|safe }})'>
+                                <i class="fa-solid fa-arrow-down"></i> Test
+                            </button>
+                            <a href="/optimizer?students={{ c.predicted_students }}&dept={{ c.department }}&slot={{ c.time_slot }}&room={{ c.room_id }}"
+                               class="btn btn-sm btn-outline-success" title="Optimize room for this class">
+                                <i class="fa-solid fa-sliders"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-size: 0.85rem; color: var(--text-secondary);" id="pagination-info">
+            Showing Page <span id="current-page-num">1</span> of <span id="total-pages-num">{{ ((future_week_count + 49) // 50) if future_week_count else 1 }}</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" id="btn-prev-page" class="btn btn-sm btn-secondary" onclick="changeTablePage(-1)" disabled>
+                <i class="fa-solid fa-chevron-left"></i> Previous
+            </button>
+            <span id="page-indicator" style="font-size: 0.85rem; font-weight: 700; padding: 0.25rem 0.6rem; background: #e2e8f0; border-radius: 4px;">1</span>
+            <button type="button" id="btn-next-page" class="btn btn-sm btn-secondary" onclick="changeTablePage(1)" {% if not future_week_count or future_week_count <= 50 %}disabled{% endif %}>
+                Next <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     INDIVIDUAL CLASS FINDER / MANUAL PREDICTION & MODEL ARCHITECTURE (BELOW TABLE)
+     ========================================================================= -->
+<div style="margin-top: 2rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+    <div>
+        <h3 style="margin-bottom: 0.25rem; font-size: 1.25rem;">
+            <i class="fa-solid fa-calculator" style="color: var(--primary); margin-right: 0.4rem;"></i>
+            Individual Class Attendance Finder & Predictor
+        </h3>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+            Select any class from the table above (click <strong>Test</strong>) or customize parameters below to forecast specific turnout.
+        </p>
+    </div>
+    <span class="badge badge-secondary" style="font-size: 0.8rem; padding: 0.35rem 0.65rem;">
+        <i class="fa-solid fa-sliders"></i> Interactive Parameter Tuning
+    </span>
+</div>
+
+<div id="individual-finder-section" class="grid-2">
     <!-- Prediction Form -->
     <div class="card">
         <div class="card-header">
-            <h3><i class="fa-solid fa-calculator" style="color: var(--primary);"></i> Class Attendance Inputs</h3>
+            <h3><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> Class Attendance Inputs</h3>
             <span class="badge badge-primary">Model Parameters</span>
         </div>
-        <form onsubmit="runPrediction(event)">
+
+        {% if classes and classes|length > 0 %}
+        <!-- Quick Load from Upcoming 1-Week Schedule -->
+        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.9rem; margin-bottom: 1.25rem;">
+            <label class="form-label" style="font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <span><i class="fa-solid fa-calendar-check"></i> Select Future Class from Upcoming 1-Week Schedule:</span>
+                <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-secondary);">Auto-fills form below</span>
+            </label>
+            <select id="pred-class-select" class="form-select" onchange="onSelectUploadedClass(this)">
+                <option value="">-- Choose an upcoming class to forecast --</option>
+                {% for c in classes[:40] %}
+                {% set t_time = period_time_map.get(c.time_slot, '') if period_time_map else (c.period_time or '') %}
+                <option value="{{ c.session_id }}"
+                    data-dept="{{ c.department }}"
+                    data-subject="{{ c.subject }}"
+                    data-slot="{{ c.time_slot }}"
+                    data-period="{{ c.time_slot }}"
+                    data-day="{{ c.day }}"
+                    data-date="{{ c.date }}"
+                    data-history="{{ c.historical_attendance }}"
+                    data-year="{{ c.year }}"
+                    data-sec="{{ c.section }}"
+                    data-actual="{{ c.actual_students if c.actual_students is not none else '' }}"
+                    data-expected="{{ c.expected_students if c.expected_students is not none else '' }}"
+                    data-exam="{{ c.exam_proximity if c.exam_proximity is not none else 0 }}"
+                    {% if loop.first %}selected{% endif %}
+                >
+                    [{{ c.subject }}] • {{ c.department }} Yr {{ c.year }} Sec {{ c.section }} | Period: {{ c.time_slot }}{% if t_time %} ({{ t_time }}){% endif %} • {{ c.day }} ({{ c.date }}) | Benchmark: {{ c.actual_students }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <form id="attendance-predict-form" onsubmit="runPrediction(event)">
             <div class="grid-2">
                 <div class="form-group">
                     <label class="form-label">Department</label>
                     <select id="pred-dept" class="form-select" required>
-                        <option value="CSE" selected>CSE - Computer Science</option>
-                        <option value="AIDS">AIDS - AI & Data Science</option>
-                        <option value="IT">IT - Information Technology</option>
-                        <option value="ECE">ECE - Electronics & Comm.</option>
-                        <option value="EEE">EEE - Electrical Eng.</option>
+                        {% for d in departments %}
+                        <option value="{{ d }}" {% if default_class and default_class.department == d %}selected{% elif loop.first %}selected{% endif %}>
+                            {{ d }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -39,47 +315,67 @@
                     <label class="form-label">Year & Section</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <select id="pred-year" class="form-select">
-                            <option value="3" selected>3rd Year</option>
-                            <option value="1">1st Year</option>
-                            <option value="2">2nd Year</option>
-                            <option value="4">4th Year</option>
+                            <option value="1" {% if default_class and default_class.year == 1 %}selected{% endif %}>1st Year</option>
+                            <option value="2" {% if default_class and default_class.year == 2 %}selected{% endif %}>2nd Year</option>
+                            <option value="3" {% if not default_class or default_class.year == 3 %}selected{% endif %}>3rd Year</option>
+                            <option value="4" {% if default_class and default_class.year == 4 %}selected{% endif %}>4th Year</option>
                         </select>
                         <select id="pred-sec" class="form-select">
-                            <option value="A" selected>Sec A</option>
-                            <option value="B">Sec B</option>
-                            <option value="C">Sec C</option>
+                            <option value="A" {% if not default_class or default_class.section == 'A' %}selected{% endif %}>Sec A</option>
+                            <option value="B" {% if default_class and default_class.section == 'B' %}selected{% endif %}>Sec B</option>
+                            <option value="C" {% if default_class and default_class.section == 'C' %}selected{% endif %}>Sec C</option>
+                            <option value="D" {% if default_class and default_class.section == 'D' %}selected{% endif %}>Sec D</option>
                         </select>
                     </div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label class="form-label">Subject Title</label>
-                <input type="text" id="pred-subject" class="form-control" value="Artificial Intelligence & Machine Learning" required>
+                <label class="form-label" style="display: flex; justify-content: space-between;">
+                    <span>Subject Title (from Uploaded Data)</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Select from list or type</span>
+                </label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="pred-subject" list="pred-subject-list" class="form-control" 
+                           value="{{ default_class.subject if default_class else (subjects[0] if subjects else 'DBMS') }}" 
+                           required placeholder="Select or enter subject name">
+                    <datalist id="pred-subject-list">
+                        {% for s in subjects %}
+                        <option value="{{ s }}"></option>
+                        {% endfor %}
+                    </datalist>
+                    {% if subjects %}
+                    <select class="form-select" style="max-width: 170px;" onchange="if(this.value){ document.getElementById('pred-subject').value = this.value; }">
+                        <option value="">Quick Pick</option>
+                        {% for s in subjects %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
             </div>
 
             <div class="grid-2">
                 <div class="form-group">
                     <label class="form-label">Day of Week</label>
                     <select id="pred-day" class="form-select">
-                        <option value="Monday" selected>Monday</option>
-                        <option value="Tuesday">Tuesday</option>
-                        <option value="Wednesday">Wednesday</option>
-                        <option value="Thursday">Thursday</option>
-                        <option value="Friday">Friday</option>
-                        <option value="Saturday">Saturday</option>
+                        {% for dy in days %}
+                        <option value="{{ dy }}" {% if default_class and default_class.day == dy %}selected{% elif not default_class and dy == 'Monday' %}selected{% endif %}>
+                            {{ dy }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Time Slot / Period</label>
+                    <label class="form-label"><i class="fa-solid fa-clock"></i> Period / Time Slot</label>
                     <select id="pred-slot" class="form-select">
-                        <option value="P1">P1 (09:00 - 10:00)</option>
-                        <option value="P2" selected>P2 (10:00 - 11:00)</option>
-                        <option value="P3">P3 (11:15 - 12:15)</option>
-                        <option value="P4">P4 (12:15 - 01:15)</option>
-                        <option value="P5">P5 (02:00 - 03:00)</option>
-                        <option value="P6">P6 (03:00 - 04:00)</option>
+                        {% for ts in time_slots %}
+                        {% set t_time = period_time_map.get(ts, '') if period_time_map else '' %}
+                        <option value="{{ ts }}" {% if default_class and default_class.time_slot == ts %}selected{% elif not default_class and ts == 'P1' %}selected{% endif %}>
+                            Period {{ ts }}{% if t_time %} ({{ t_time }}){% endif %}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>
@@ -87,15 +383,17 @@
             <div class="grid-2">
                 <div class="form-group">
                     <label class="form-label">Historical Turnout (%)</label>
-                    <input type="number" id="pred-history" class="form-control" value="82.5" min="40" max="100" step="0.5">
+                    <input type="number" id="pred-history" class="form-control" 
+                           value="{{ default_class.historical_attendance if default_class else '87.14' }}" 
+                           min="40" max="100" step="0.01">
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Exam Proximity</label>
                     <select id="pred-exam" class="form-select">
-                        <option value="0" selected>0 - Normal Semester Week</option>
-                        <option value="1">1 - Mid-Term / Test Approaching</option>
-                        <option value="2">2 - Final Exam Review Week</option>
+                        <option value="0" {% if not default_class or default_class.exam_proximity == 0 %}selected{% endif %}>0 - Normal Semester Week</option>
+                        <option value="1" {% if default_class and default_class.exam_proximity == 1 %}selected{% endif %}>1 - Mid-Term / Test Approaching</option>
+                        <option value="2" {% if default_class and default_class.exam_proximity == 2 %}selected{% endif %}>2 - Final Exam Review Week</option>
                     </select>
                 </div>
             </div>
@@ -112,17 +410,38 @@
     <div>
         <div id="pred-result-card" class="card" style="display: none; border-top: 4px solid var(--success);">
             <div class="card-header">
-                <h3><i class="fa-solid fa-bullseye" style="color: var(--success);"></i> Prediction Results</h3>
+                <div>
+                    <h3 style="margin-bottom: 0.2rem;"><i class="fa-solid fa-bullseye" style="color: var(--success);"></i> Prediction Results</h3>
+                    <span id="pred-subject-heading" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);"></span>
+                </div>
                 <span class="badge badge-success">ML Output</span>
             </div>
 
-            <div class="grid-2" style="margin-bottom: 1.5rem;">
+            <!-- Prominent Period & Session Context Banner -->
+            <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span class="badge badge-primary" style="font-size: 0.85rem; padding: 0.35rem 0.65rem; font-weight: 700;">
+                        <i class="fa-solid fa-clock"></i> <span id="pred-period-badge">Period {{ default_class.time_slot if default_class else 'P1' }} (09:00 - 10:00)</span>
+                    </span>
+                    <span class="badge badge-secondary" style="font-size: 0.82rem; padding: 0.35rem 0.6rem;">
+                        <i class="fa-solid fa-book"></i> <span id="pred-subject-badge">{{ default_class.subject if default_class else 'DBMS' }}</span>
+                    </span>
+                    <span class="badge badge-dark" style="font-size: 0.82rem; padding: 0.35rem 0.6rem;">
+                        <i class="fa-solid fa-calendar-day"></i> <span id="pred-day-badge">{{ default_class.day if default_class else 'Wednesday' }}</span>
+                    </span>
+                </div>
+                <span id="pred-class-meta" style="font-size: 0.82rem; font-weight: 700; color: var(--text-secondary);">
+                    {{ default_class.department if default_class else 'AIDS' }} Yr {{ default_class.year if default_class else 3 }} • Sec {{ default_class.section if default_class else 'A' }}
+                </span>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 1.25rem;">
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
                     <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #166534;">Predicted Students</span>
                     <div id="pred-count" style="font-size: 2.2rem; font-weight: 800; color: #15803d; margin-top: 0.25rem;">
                         --
                     </div>
-                    <small style="color: #16a34a;">Expected actual attendees</small>
+                    <small style="color: #16a34a;">Future turnout forecast</small>
                 </div>
 
                 <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
@@ -131,6 +450,20 @@
                         --
                     </div>
                     <small id="pred-buffer" style="color: #6366f1;">Includes safety buffer</small>
+                </div>
+            </div>
+
+            <!-- Actual Attendance / Benchmark Comparison Banner -->
+            <div id="pred-actual-comparison-box" style="display: none; background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.9rem 1.1rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">Baseline / Actual Attendees</span>
+                        <div id="pred-actual-display" style="font-size: 1.5rem; font-weight: 800; color: #0284c7;">--</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary);">Variance / Accuracy</span>
+                        <div id="pred-accuracy-display" style="margin-top: 0.2rem;">--</div>
+                    </div>
                 </div>
             </div>
 
@@ -157,11 +490,24 @@
                 <i class="fa-solid fa-graduation-cap"></i> Machine Learning Architecture (Viva Guide)
             </h4>
             <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-                <strong>Algorithm:</strong> Linear Regression pipeline paired with Scikit-learn OneHotEncoder for categorical attributes (Department, Day, Period).<br>
-                <strong>Evaluation Metrics:</strong> Model tested using Mean Absolute Error (MAE: ~5.3 students) and Root Mean Squared Error (RMSE: ~9.3 students).<br>
+                <strong>Algorithm:</strong> Random Forest Regressor & Linear Regression paired with Scikit-learn OneHotEncoder for categorical attributes (Department, Day, Period).<br>
+                <strong>Horizon:</strong> Forecasts turnout for upcoming 1-week schedule (576 sessions) before room allocation decisions.<br>
+                <strong>Evaluation Metrics:</strong> Model evaluated using Mean Absolute Error (MAE: ~4.8 students) and Root Mean Squared Error (RMSE: ~8.6 students).<br>
                 <strong>Safety Buffer:</strong> College best practice allocates a +10% capacity cushion to prevent unexpected overcrowding.
             </p>
         </div>
     </div>
 </div>
+
+<script>
+    // Automatically trigger initial prediction for default class on page load
+    document.addEventListener("DOMContentLoaded", function() {
+        const classSelect = document.getElementById('pred-class-select');
+        if (classSelect && classSelect.value) {
+            onSelectUploadedClass(classSelect);
+        } else {
+            runPrediction();
+        }
+    });
+</script>
 {% endblock %}

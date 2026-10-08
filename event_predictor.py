@@ -2,7 +2,7 @@
 event_predictor.py - College Event Attendance & Hall Allocator
 Predicts expected turnout for academic and campus events based on registrations,
 event type turnout benchmarks, and historical attendance rates.
-Recommends optimal seminar halls / auditoriums without complicated ML.
+Recommends optimal seminar halls / auditoriums and supports user-preferred venue selection & fixing.
 """
 
 from db import get_db_connection
@@ -18,9 +18,10 @@ BENCHMARKS = {
     'Orientation / Induction': 0.92
 }
 
-def predict_event_resource(event_name, event_type, date, registration_count, historical_turnout_rate=None, duration_hours=2):
+def predict_event_resource(event_name, event_type, date, registration_count, historical_turnout_rate=None, duration_hours=2, preferred_venue=None):
     """
-    Predicts expected event attendees and finds the most suitable college venue.
+    Predicts expected event attendees and finds or fixes the most suitable college venue.
+    Supports user preferred venue specification ('preferred_venue') with constraint validation.
     """
     # 1. Calculate turnout percentage
     if historical_turnout_rate is not None and historical_turnout_rate > 0:
@@ -47,12 +48,28 @@ def predict_event_resource(event_name, event_type, date, registration_count, his
     rooms = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
-    # Prefer Seminar Halls or Lecture Halls first if capacity fits, else largest classrooms
+    # Build all venues annotated with surplus / deficit relative to expected attendees
+    all_annotated_venues = []
+    for r in rooms:
+        cap = r['capacity']
+        diff = cap - expected_attendees
+        is_fit = cap >= expected_attendees
+        all_annotated_venues.append({
+            'room_id': r['room_id'],
+            'building': r['building'],
+            'floor': r['floor'],
+            'capacity': cap,
+            'room_type': r['room_type'],
+            'diff': diff,
+            'is_fit': is_fit,
+            'display_label': f"{r['room_id']} — {r['room_type']} ({cap} seats, Fl {r['floor']}, {r['building']})"
+        })
+
+    # Find algorithmically recommended rooms (prefer Seminar/Lecture Halls)
     suitable_rooms = []
     for r in rooms:
         cap = r['capacity']
         if cap >= expected_attendees:
-            # Score hall suitability
             hall_score = 0
             if 'Hall' in r['room_type'] or 'Seminar' in r['room_type']:
                 hall_score += 30
@@ -70,7 +87,52 @@ def predict_event_resource(event_name, event_type, date, registration_count, his
             })
 
     suitable_rooms.sort(key=lambda x: x['score'], reverse=True)
-    best_venue = suitable_rooms[0] if suitable_rooms else (rooms[-1] if rooms else None)
+    algo_best = suitable_rooms[0] if suitable_rooms else (rooms[-1] if rooms else None)
+
+    # 4. Check if user specified a Preferred Venue and fix it
+    is_preferred_fixed = False
+    venue_warning = None
+    venue_notice = None
+    best_venue = None
+
+    clean_pref = (preferred_venue or '').strip()
+    if clean_pref and clean_pref.lower() not in ['auto', 'none', 'null', '']:
+        matched_room = next((r for r in rooms if r['room_id'].lower() == clean_pref.lower()), None)
+        if matched_room:
+            cap = matched_room['capacity']
+            diff = cap - expected_attendees
+            best_venue = {
+                'room_id': matched_room['room_id'],
+                'building': matched_room['building'],
+                'floor': matched_room['floor'],
+                'capacity': cap,
+                'room_type': matched_room['room_type'],
+                'unused_seats': diff,
+                'score': 100
+            }
+            is_preferred_fixed = True
+            if cap < expected_attendees:
+                venue_warning = (
+                    f"⚠️ Preferred venue '{matched_room['room_id']}' has capacity of {cap} seats, "
+                    f"which is less than predicted attendance of {expected_attendees} students "
+                    f"({abs(diff)} seats short). Overcrowding may occur."
+                )
+            else:
+                venue_notice = (
+                    f"🔒 User Preferred Venue '{matched_room['room_id']}' fixed. "
+                    f"Fits {expected_attendees} students with {diff} surplus seats."
+                )
+
+    if not best_venue:
+        best_venue = algo_best
+
+    explanation_text = (
+        f"Based on {round(turnout_rate * 100)}% benchmark attendance for '{event_type}', "
+        f"we project ~{expected_attendees} students from {registration_count} registrations. "
+        f"Including a 10% safety buffer (+{safety_buffer_seats} seats), venue requires minimum {recommended_min_capacity} seats."
+    )
+    if is_preferred_fixed:
+        explanation_text += f" Venue explicitly fixed to preferred choice: {best_venue['room_id']}."
 
     return {
         'event_name': event_name,
@@ -82,10 +144,10 @@ def predict_event_resource(event_name, event_type, date, registration_count, his
         'predicted_attendees': expected_attendees,
         'recommended_min_capacity': recommended_min_capacity,
         'best_venue': best_venue,
-        'alternative_venues': suitable_rooms[1:4] if len(suitable_rooms) > 1 else [],
-        'explanation': (
-            f"Based on {round(turnout_rate * 100)}% benchmark attendance for '{event_type}', "
-            f"we project ~{expected_attendees} students from {registration_count} registrations. "
-            f"Including a 10% safety buffer (+{safety_buffer_seats} seats), venue requires minimum {recommended_min_capacity} seats."
-        )
+        'is_preferred_fixed': is_preferred_fixed,
+        'venue_warning': venue_warning,
+        'venue_notice': venue_notice,
+        'alternative_venues': [r for r in suitable_rooms if r['room_id'] != (best_venue['room_id'] if best_venue else '')][:4],
+        'all_venues': all_annotated_venues,
+        'explanation': explanation_text
     }

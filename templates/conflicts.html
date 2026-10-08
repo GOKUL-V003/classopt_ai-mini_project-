@@ -1,15 +1,18 @@
 {% extends "layout.html" %}
 
-{% block title %}Conflict Detection & Resolution{% endblock %}
+{% block title %}Conflict Detection & AI Resolution{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div class="page-title">
         <h2>Schedule & Resource Conflict Detection</h2>
-        <p>Automated scanner detecting double bookings, overcrowded rooms, faculty clashes, and missing lab equipment.</p>
+        <p>Automated scanner with Real-Time AI Copilot to diagnose schedule clashes, overcrowding, and apply instant re-allocations.</p>
     </div>
-    <div>
-        <a href="{{ url_for('optimizer') }}" class="btn btn-primary">
+    <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+        <button id="btn-batch-ai-resolve" class="btn btn-primary" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Auto-Resolve All Conflicts
+        </button>
+        <a href="{{ url_for('optimizer') }}" class="btn btn-outline">
             <i class="fa-solid fa-sliders"></i> Open Optimizer
         </a>
     </div>
@@ -19,39 +22,45 @@
 <div class="grid-4" style="margin-bottom: 1.5rem;">
     <div class="kpi-card danger">
         <div class="kpi-label">Active Conflicts</div>
-        <div class="kpi-value">{{ counts.total if counts is defined else (conflicts|length if conflicts else 0) }}</div>
+        <div class="kpi-value" id="kpi-total-conflicts">{{ counts.total if counts is defined else (conflicts|length if conflicts else 0) }}</div>
         <div class="kpi-subtext">Detected in timetable</div>
     </div>
     <div class="kpi-card">
         <div class="kpi-label">Capacity Deficits</div>
-        <div class="kpi-value">{{ counts.capacity if counts is defined else 0 }}</div>
+        <div class="kpi-value" id="kpi-capacity-conflicts">{{ counts.capacity if counts is defined else 0 }}</div>
         <div class="kpi-subtext">Students &gt; Seats</div>
     </div>
     <div class="kpi-card warning">
         <div class="kpi-label">Room Double Bookings</div>
-        <div class="kpi-value">{{ counts.room if counts is defined else 0 }}</div>
+        <div class="kpi-value" id="kpi-room-conflicts">{{ counts.room if counts is defined else 0 }}</div>
         <div class="kpi-subtext">Same room collision</div>
     </div>
     <div class="kpi-card accent">
         <div class="kpi-label">Faculty &amp; Lab Clashes</div>
-        <div class="kpi-value">{{ counts.faculty_resource if counts is defined else 0 }}</div>
+        <div class="kpi-value" id="kpi-faculty-conflicts">{{ counts.faculty_resource if counts is defined else 0 }}</div>
         <div class="kpi-subtext">Resource mismatches</div>
     </div>
 </div>
 
+<!-- Dynamic Resolution Notification Alert -->
+<div id="ai-batch-alert" style="display: none; margin-bottom: 1.5rem;"></div>
+
 <!-- Conflict Cards List -->
 {% if conflicts %}
-<div style="display: flex; flex-direction: column; gap: 1.25rem;">
+<div id="conflicts-container" style="display: flex; flex-direction: column; gap: 1.25rem;">
     {% for c in conflicts %}
-    <div class="card {{ c.card_class if c.card_class is defined else 'card-conflict-medium' }}">
+    <div class="card {{ c.card_class if c.card_class is defined else 'card-conflict-medium' }}" id="card-{{ c.conflict_id }}">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.8rem;">
-            <div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                    <span class="badge {{ c.badge_class if c.badge_class is defined else 'badge-warning' }}">
+            <div style="flex: 1; min-width: 280px;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+                    <span class="badge {{ c.badge_class if c.badge_class is defined else 'badge-warning' }}" id="badge-{{ c.conflict_id }}">
                         {{ c.type }}
                     </span>
                     <span style="font-size: 0.82rem; color: var(--text-muted);">
                         <i class="fa-solid fa-calendar-day"></i> {{ c.date }} • {{ c.time_slot }}
+                    </span>
+                    <span style="font-size: 0.82rem; color: var(--text-muted);">
+                        • Session ID: <code>{{ c.session_id }}</code>
                     </span>
                 </div>
                 <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">
@@ -62,18 +71,30 @@
                 </p>
             </div>
 
-            <div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                {% if c.can_resolve %}
+                <button type="button" class="btn btn-primary btn-sm btn-ai-remedy" 
+                        onclick="requestAIRemedy('{{ c.conflict_id }}', '{{ c.session_id }}', '{{ c.type }}', '{{ c.room_id }}', '{{ c.date }}', '{{ c.time_slot }}', '{{ c.subject }}', '{{ c.department }}', {{ c.students }})"
+                        id="btn-remedy-{{ c.conflict_id }}"
+                        style="font-size: 0.82rem; background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none;">
+                    <i class="fa-solid fa-robot"></i> AI Smart Remedy
+                </button>
+                {% else %}
+                <span class="badge badge-warning" style="font-size: 0.8rem; padding: 6px 10px;">
+                    <i class="fa-solid fa-user-gear"></i> Manual Instructor Adjustment
+                </span>
+                {% endif %}
                 <a href="{{ url_for('optimizer') }}" class="btn btn-outline" style="font-size: 0.82rem;">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Resolve with Optimizer
+                    <i class="fa-solid fa-sliders"></i> Optimizer
                 </a>
             </div>
         </div>
 
-        <!-- Suggested Alternative Rooms -->
+        <!-- Suggested Alternative Rooms (Heuristic list) -->
         {% if c.suggested_rooms %}
-        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <div style="margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">
-                Suggested Alternative Rooms:
+                Candidate Rooms:
             </span>
             {% for r in c.suggested_rooms %}
             <span class="badge badge-primary" style="font-size: 0.78rem;">
@@ -82,6 +103,9 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        <!-- Expandable Real-Time AI Remedy Box -->
+        <div id="ai-remedy-{{ c.conflict_id }}" class="ai-inline-box" style="display: none; margin-top: 1rem;"></div>
     </div>
     {% endfor %}
 </div>
@@ -96,4 +120,271 @@
     </p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Real-time AI Conflict Resolution logic
+async function requestAIRemedy(conflictId, sessionId, type, roomId, date, timeSlot, subject, department, students) {
+    const box = document.getElementById(`ai-remedy-${conflictId}`);
+    const btn = document.getElementById(`btn-remedy-${conflictId}`);
+    if (!box) return;
+
+    // Toggle if already visible
+    if (box.style.display === 'block' && box.dataset.loaded === 'true') {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; color: #4338ca; font-size: 0.85rem; font-weight: 600;">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            Real-time AI Copilot analyzing 6 operational constraints and evaluating campus room availability...
+        </div>
+    `;
+
+    try {
+        const apiKey = localStorage.getItem('classopt_gemini_key') || localStorage.getItem('smartoccupy_gemini_key') || '';
+        const res = await fetch('/api/ai-suggest-fix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                conflict: {
+                    type: type,
+                    session_id: sessionId,
+                    room_id: roomId,
+                    date: date,
+                    time_slot: timeSlot,
+                    subject: subject,
+                    department: department,
+                    students: students
+                },
+                apiKey: apiKey
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success && data.can_resolve) {
+            box.dataset.loaded = 'true';
+            box.innerHTML = `
+                <div class="ai-remedy-header">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="ai-source-badge">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> ${escapeHtml(data.ai_source || 'AI Copilot Engine')}
+                        </span>
+                        <span style="font-size: 0.8rem; color: #64748b; font-weight: 600;">
+                            Constraint Fit Score: <strong style="color: #4338ca;">${data.score}/100</strong>
+                        </span>
+                    </div>
+                    <div>
+                        <span class="badge badge-success" style="font-size: 0.78rem;">
+                            <i class="fa-solid fa-check"></i> Feasible Solution Found
+                        </span>
+                    </div>
+                </div>
+
+                <div class="ai-diagnosis-card">
+                    <strong>🧠 AI Root Cause Diagnosis:</strong><br>
+                    ${escapeHtml(data.diagnosis)}
+                </div>
+
+                <div class="ai-action-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong style="color: #065f46; font-size: 0.95rem;">
+                                <i class="fa-solid fa-circle-check"></i> Recommended Action Plan:
+                            </strong>
+                            <div style="font-size: 0.88rem; color: #1e293b; margin-top: 4px; font-weight: 600;">
+                                ${escapeHtml(data.action_plan)}
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                onclick="applyConflictFix('${conflictId}', '${data.session_id}', '${data.recommended_room}', '${data.original_room}', this)"
+                                style="background: linear-gradient(135deg, #10b981, #059669); border: none; font-weight: 700; padding: 8px 16px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);">
+                            <i class="fa-solid fa-bolt"></i> Apply AI Fix in Real-Time
+                        </button>
+                    </div>
+
+                    ${data.reasons && data.reasons.length ? `
+                        <ul class="ai-reason-list">
+                            ${data.reasons.map(r => `<li><i class="fa-solid fa-check-circle"></i> ${escapeHtml(r)}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            box.innerHTML = `
+                <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 6px; font-size: 0.85rem; color: #92400e;">
+                    <strong>⚠️ AI Notice:</strong> ${escapeHtml(data.diagnosis || 'No feasible vacant room found at this exact time slot.')}<br>
+                    <strong>Recommendation:</strong> ${escapeHtml(data.recommendation || 'Consider rescheduling to an alternate time slot or splitting class batches.')}
+                </div>
+            `;
+        }
+    } catch (err) {
+        box.innerHTML = `
+            <div style="color: #dc2626; font-size: 0.85rem;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Error loading AI recommendation: ${escapeHtml(err.message)}
+            </div>
+        `;
+    }
+}
+
+// Executes instant DB reallocation
+async function applyConflictFix(conflictId, sessionId, newRoom, origRoom, btnElement) {
+    if (!confirm(`Confirm Reallocation:\n\nMove session ${sessionId} from Room ${origRoom} to Room ${newRoom}?\n\nThis will update Timetable and Attendance records immediately in the database.`)) {
+        return;
+    }
+
+    if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Reallocating in DB...`;
+    }
+
+    try {
+        const res = await fetch('/api/resolve-conflict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                new_room_id: newRoom,
+                original_room: origRoom,
+                notes: 'Resolved via Real-Time AI Copilot'
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            // Update Card visual state
+            const card = document.getElementById(`card-${conflictId}`);
+            if (card) {
+                card.classList.add('card-conflict-resolved');
+            }
+
+            const badge = document.getElementById(`badge-${conflictId}`);
+            if (badge) {
+                badge.className = 'badge badge-success';
+                badge.innerHTML = `<i class="fa-solid fa-check-circle"></i> Resolved: Reallocated to ${newRoom}`;
+            }
+
+            const box = document.getElementById(`ai-remedy-${conflictId}`);
+            if (box) {
+                box.innerHTML = `
+                    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px 14px; color: #166534; font-size: 0.88rem;">
+                        <strong>🎉 Conflict Successfully Resolved!</strong><br>
+                        Session <code>${sessionId}</code> (${data.subject || 'Class'}) has been successfully reallocated from <strong>Room ${origRoom}</strong> to <strong>Room ${newRoom}</strong>.
+                        The timetable and student attendance database has been updated in real-time.
+                    </div>
+                `;
+            }
+
+            // Update KPI counts
+            if (data.remaining_count !== undefined) {
+                document.getElementById('kpi-total-conflicts').innerText = data.remaining_count;
+                document.getElementById('kpi-capacity-conflicts').innerText = data.capacity_count || 0;
+                document.getElementById('kpi-room-conflicts').innerText = data.room_count || 0;
+                document.getElementById('kpi-faculty-conflicts').innerText = data.faculty_resource_count || 0;
+            }
+        } else {
+            alert(`Error resolving conflict: ${data.error || 'Unknown database error'}`);
+            if (btnElement) {
+                btnElement.disabled = false;
+                btnElement.innerHTML = `<i class="fa-solid fa-bolt"></i> Retry Apply AI Fix`;
+            }
+        }
+    } catch (err) {
+        alert(`Network error: ${err.message}`);
+        if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = `<i class="fa-solid fa-bolt"></i> Retry Apply AI Fix`;
+        }
+    }
+}
+
+// Batch Auto-Resolve All Conflicts
+document.getElementById('btn-batch-ai-resolve')?.addEventListener('click', async function() {
+    const btn = this;
+    if (!confirm('Run AI Autonomous Batch Resolver?\n\nThe AI Copilot will evaluate all active conflicts against room capacity, equipment, and zero timetable collisions, and reallocate sessions automatically in the database.')) {
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> AI Optimizing Timetable...`;
+
+    const alertBox = document.getElementById('ai-batch-alert');
+    if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.innerHTML = `
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; color: #1e40af; font-size: 0.9rem;">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> Real-time AI batch optimizer scanning timetable collisions across all departments...
+            </div>
+        `;
+    }
+
+    try {
+        const apiKey = localStorage.getItem('classopt_gemini_key') || localStorage.getItem('smartoccupy_gemini_key') || '';
+        const res = await fetch('/api/ai-batch-resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: apiKey, limit: 15 })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            if (alertBox) {
+                alertBox.innerHTML = `
+                    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; color: #166534; font-size: 0.9rem;">
+                        <h4 style="margin: 0 0 6px; font-weight: 700; color: #14532d;">
+                            🎉 AI Batch Resolution Completed!
+                        </h4>
+                        <p style="margin: 0 0 8px;">
+                            ${escapeHtml(data.message)}
+                        </p>
+                        ${data.resolved_items && data.resolved_items.length ? `
+                            <div style="background: #ffffff; border-radius: 6px; padding: 10px; margin-top: 8px; max-height: 180px; overflow-y: auto; font-size: 0.82rem;">
+                                ${data.resolved_items.map(item => `
+                                    <div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9;">
+                                        ✓ <strong>${escapeHtml(item.subject)}</strong> (<code>${escapeHtml(item.session_id)}</code>): Reallocated Room ${escapeHtml(item.from_room)} → <strong style="color: #059669;">Room ${escapeHtml(item.to_room)}</strong>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        <div style="margin-top: 10px;">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="window.location.reload()">
+                                <i class="fa-solid fa-arrows-rotate"></i> Refresh Conflicts List
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('kpi-total-conflicts').innerText = data.remaining_count;
+            btn.innerHTML = `<i class="fa-solid fa-check"></i> Batch Solved (${data.resolved_count})`;
+            
+            // Reload page smoothly after 2.5s if desired
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            alert(`Batch resolution failed: ${data.error || 'Unknown error'}`);
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> AI Auto-Resolve All Conflicts`;
+        }
+    } catch (err) {
+        alert(`Error executing batch resolution: ${err.message}`);
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> AI Auto-Resolve All Conflicts`;
+    }
+});
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.innerText = String(text);
+    return div.innerHTML;
+}
+</script>
 {% endblock %}

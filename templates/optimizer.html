@@ -30,6 +30,80 @@
     </div>
 </div>
 
+<!-- Active Timetable Sessions Quick-Optimize Table (Primary Table View) -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+        <div>
+            <h3><i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Sample Timetable Sessions for Review</h3>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                Click "Optimize" on any scheduled class below to instantly evaluate and reallocate.
+            </p>
+        </div>
+        <span class="badge badge-primary">
+            {{ sessions|length if sessions else 0 }} Sessions Loaded
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Subject & Dept</th>
+                    <th>Period</th>
+                    <th>Students</th>
+                    <th>Current Room</th>
+                    <th>Capacity</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr id="row-{{ s.session_id }}">
+                    <td><strong>{{ s.session_id }}</strong></td>
+                    <td>{{ s.subject }} ({{ s.department }})</td>
+                    <td>{{ s.time_slot }}</td>
+                    <td>{{ s.students }}</td>
+                    <td><span class="badge badge-primary room-badge">{{ s.room_id }}</span></td>
+                    <td>{{ s.capacity }} seats</td>
+                    <td>
+                        {% if s.students > s.capacity %}
+                            <span class="badge badge-danger">Overcrowded (+{{ s.students - s.capacity }})</span>
+                        {% elif (s.students / s.capacity) < 0.50 %}
+                            <span class="badge badge-warning">Underutilized ({{ s.capacity - s.students }} empty)</span>
+                        {% else %}
+                            <span class="badge badge-success">Good Fit</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-outline" style="font-size: 0.76rem; padding: 0.3rem 0.65rem;"
+                            onclick="optimizeSampleSession('{{ s.session_id }}', '{{ s.subject|replace('\'', '\\\'') }}', '{{ s.department }}', '{{ s.time_slot }}', '{{ s.room_id }}', {{ s.students }}, this)">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Optimize
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Section Header for Manual / Single Class Optimizer -->
+<div style="margin-top: 2rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+    <div>
+        <h3 style="margin-bottom: 0.25rem; font-size: 1.25rem;">
+            <i class="fa-solid fa-sliders" style="color: var(--primary); margin-right: 0.4rem;"></i>
+            Single Class Optimizer & Constraint Evaluator
+        </h3>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+            Select any session from the table above (click <strong>Optimize</strong>) or customize parameters below to evaluate room allocation.
+        </p>
+    </div>
+    <span class="badge badge-primary" style="font-size: 0.8rem; padding: 0.35rem 0.65rem;">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Autonomous Space Allocation
+    </span>
+</div>
+
 <div class="grid-2">
     <!-- Single Class Optimizer Form -->
     <div class="card">
@@ -82,11 +156,23 @@
             <div class="form-group">
                 <label class="form-label">Currently Assigned Room (Optional)</label>
                 <select id="opt-current-room" class="form-select">
-                    <option value="R203" selected>R203 (Capacity: 120 seats - Large Lecture Hall)</option>
-                    <option value="R204">R204 (Capacity: 150 seats - Auditorial Hall)</option>
-                    <option value="R202">R202 (Capacity: 100 seats - Seminar Hall)</option>
-                    <option value="R105">R105 (Capacity: 75 seats - Medium Classroom)</option>
-                    <option value="R104">R104 (Capacity: 60 seats - Small Classroom)</option>
+                    {% if classrooms %}
+                        {% for rm in classrooms %}
+                        <option value="{{ rm.room_id }}" {% if rm.room_id == 'R203' %}selected{% endif %}>
+                            {{ rm.room_id }} (Capacity: {{ rm.capacity }} seats - {{ rm.room_type }})
+                        </option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="R101">R101 (Capacity: 30 seats)</option>
+                        <option value="R102">R102 (Capacity: 40 seats)</option>
+                        <option value="R103">R103 (Capacity: 50 seats)</option>
+                        <option value="R104">R104 (Capacity: 60 seats)</option>
+                        <option value="R105">R105 (Capacity: 75 seats)</option>
+                        <option value="R201">R201 (Capacity: 90 seats - Lab)</option>
+                        <option value="R202">R202 (Capacity: 100 seats)</option>
+                        <option value="R203" selected>R203 (Capacity: 120 seats)</option>
+                        <option value="R204">R204 (Capacity: 150 seats)</option>
+                    {% endif %}
                 </select>
                 <small style="color: var(--text-muted); font-size: 0.78rem;">
                     Selecting the current room enables direct Before vs After comparison of unused capacity.
@@ -107,6 +193,7 @@
                 <div class="card-header">
                     <div>
                         <span class="badge badge-success" style="margin-bottom: 0.35rem;">Optimal Match Found</span>
+                        <span id="rec-session-badge" class="badge badge-accent" style="display: none; margin-bottom: 0.35rem; margin-left: 0.4rem;"></span>
                         <h3 id="rec-room-id" style="font-size: 1.6rem; color: #15803d;">--</h3>
                         <p id="rec-room-details" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">--</p>
                     </div>
@@ -166,61 +253,6 @@
                 Specify predicted students and timetable slot on the left to see the multi-constraint scoring algorithm evaluate and rank all available rooms.
             </p>
         </div>
-    </div>
-</div>
-
-<!-- Active Timetable Sessions Quick-Optimize Table -->
-<div class="card" style="margin-top: 2rem;">
-    <div class="card-header">
-        <div>
-            <h3><i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Sample Timetable Sessions for Review</h3>
-            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem;">
-                Click "Optimize" on any scheduled class below to instantly evaluate and reallocate.
-            </p>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Session ID</th>
-                    <th>Subject & Dept</th>
-                    <th>Period</th>
-                    <th>Students</th>
-                    <th>Current Room</th>
-                    <th>Capacity</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in sessions %}
-                <tr>
-                    <td><strong>{{ s.session_id }}</strong></td>
-                    <td>{{ s.subject }} ({{ s.department }})</td>
-                    <td>{{ s.time_slot }}</td>
-                    <td>{{ s.students }}</td>
-                    <td><span class="badge badge-primary">{{ s.room_id }}</span></td>
-                    <td>{{ s.capacity }} seats</td>
-                    <td>
-                        {% if s.students > s.capacity %}
-                            <span class="badge badge-danger">Overcrowded (+{{ s.students - s.capacity }})</span>
-                        {% elif (s.students / s.capacity) < 0.50 %}
-                            <span class="badge badge-warning">Underutilized ({{ s.capacity - s.students }} empty)</span>
-                        {% else %}
-                            <span class="badge badge-success">Good Fit</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <button class="btn btn-outline" style="font-size: 0.76rem; padding: 0.3rem 0.65rem;"
-                            onclick="document.getElementById('opt-students').value='{{ s.students }}'; document.getElementById('opt-slot').value='{{ s.time_slot }}'; document.getElementById('opt-current-room').value='{{ s.room_id }}'; runSingleOptimization();">
-                            Optimize
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
     </div>
 </div>
 {% endblock %}

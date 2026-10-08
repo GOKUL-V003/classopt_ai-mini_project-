@@ -86,8 +86,63 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" id="ai-instructions-toggle-btn" class="ai-header-btn" title="View Stored AI Instructions in Database" aria-label="View Stored AI Instructions">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button type="button" id="ai-key-toggle-btn" class="ai-header-btn" title="Google Gemini API Key">
+                    <i class="fa-solid fa-key"></i>
+                </button>
                 <button type="button" id="ai-drawer-close" class="ai-close-btn" title="Close Assistant">
                     <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stored AI Instructions & Action History Drawer -->
+        <div id="ai-instructions-drawer" class="ai-key-drawer" style="display: none; max-height: 240px; overflow-y: auto; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-weight: 700; color: #1e293b; font-size: 12px;">
+                    <i class="fa-solid fa-database" style="color: #4f46e5;"></i> Stored AI Instructions (SQLite DB)
+                </span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <button type="button" id="btn-refresh-instructions" style="background: none; border: none; cursor: pointer; color: #4f46e5; font-size: 11px; font-weight: 600;" title="Refresh Log">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button type="button" id="ai-instructions-drawer-close" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 12px;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <p style="margin: 0 0 8px; color: #64748b; font-size: 11px;">
+                All chatbot prompts, scheduling actions, and outputs are systematically persisted in table <code>ai_chat_instructions</code>.
+            </p>
+            <div id="ai-instructions-list" style="font-size: 11.5px; color: #334155;">
+                <div style="text-align: center; color: #94a3b8; padding: 10px;">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Loading instructions...
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Gemini API Key Drawer -->
+        <div id="ai-key-drawer" class="ai-key-drawer" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; color: #1e293b;">
+                    <i class="fa-solid fa-lock"></i> Google Gemini API Key
+                </span>
+                <button type="button" id="ai-key-drawer-close" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 12px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p style="margin: 4px 0 6px; color: #64748b; font-size: 11px;">
+                Saved strictly in your browser <code>localStorage</code>. Free keys from Google AI Studio. Blank uses offline smart engine.
+            </p>
+            <input type="password" id="ai-gemini-key-input" class="ai-key-input" placeholder="Paste Gemini API Key (AIzaSy...)">
+            <div style="display: flex; gap: 6px; margin-top: 6px;">
+                <button type="button" id="btn-save-gemini-key" class="btn btn-sm btn-primary" style="font-size: 11px; padding: 4px 10px;">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Key
+                </button>
+                <button type="button" id="btn-clear-gemini-key" class="btn btn-sm btn-outline" style="font-size: 11px; padding: 4px 10px;">
+                    <i class="fa-solid fa-trash-can"></i> Remove
                 </button>
             </div>
         </div>
@@ -97,19 +152,27 @@
                 <div class="ai-msg-avatar"><i class="fa-solid fa-robot"></i></div>
                 <div class="ai-msg-bubble ai-msg-bubble-assistant">
                     <strong>👋 Hello! I am your AI Campus Resource Copilot.</strong><br><br>
-                    Ask me anything about classroom allocations, timetable conflicts, capacity optimization, ML predictions, formulas, or viva defense questions!<br><br>
-                    <span style="font-size: 11px; color: #64748b;">Click any quick topic below for an instant answer:</span>
+                    I can detect real-time timetable conflicts, schedule meetings directly into the calendar database, explain overcrowding, and answer viva defense questions!<br><br>
+                    <span style="font-size: 11px; color: #64748b;">Click any quick topic below or ask your own question:</span>
                 </div>
             </div>
 
             <!-- Quick Suggestion Chips -->
             <div class="ai-quick-chips" id="ai-quick-chips">
+                <button type="button" class="ai-chip" data-query="Schedule a meeting of prompt engineering" style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; font-weight: 700;">
+                    <i class="fa-solid fa-calendar-plus"></i> 📅 Schedule Prompt Engineering
+                </button>
+                <button type="button" class="ai-chip" data-query="Scan and fix timetable conflicts" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 700;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ Fix Timetable Conflicts
+                </button>
+                <button type="button" class="ai-chip" data-query="View stored instruction logs" style="background: #f1f5f9; color: #334155; border-color: #cbd5e1; font-weight: 600;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> 📋 Stored Instructions Log
+                </button>
                 <button type="button" class="ai-chip" data-query="What is this project overview?">🏫 Project Overview</button>
                 <button type="button" class="ai-chip" data-query="What are the key formulas for occupancy and utilization?">📐 Formulas</button>
                 <button type="button" class="ai-chip" data-query="How does the 6-constraint scoring algorithm work?">⚙️ Scoring Algorithm</button>
                 <button type="button" class="ai-chip" data-query="Top viva defense questions and answers?">🎓 Viva Questions</button>
                 <button type="button" class="ai-chip" data-query="Explain the ML prediction model and metrics">🤖 Attendance ML</button>
-                <button type="button" class="ai-chip" data-query="How does the conflict detection scanner work?">⚠️ Conflicts Scanner</button>
             </div>
         </div>
 
