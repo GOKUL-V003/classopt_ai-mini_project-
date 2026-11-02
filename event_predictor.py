@@ -48,6 +48,12 @@ def predict_event_resource(event_name, event_type, date, registration_count, his
     rooms = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
+    # Ensure any room with 'lab' in its ID or text is classified as 'Lab'
+    for r in rooms:
+        if 'lab' in r['room_id'].lower():
+            r['room_type'] = 'Lab'
+            r['lab_available'] = 'Yes'
+
     # Build all venues annotated with surplus / deficit relative to expected attendees
     all_annotated_venues = []
     for r in rooms:

@@ -173,8 +173,16 @@ function runPrediction(event) {
     const historyEl = document.getElementById('pred-history');
     const examEl = document.getElementById('pred-exam');
     const subjectEl = document.getElementById('pred-subject');
+    const submitBtn = document.getElementById('btn-predict-attendance') || document.querySelector('#attendance-predict-form button[type="submit"]');
 
     if (!deptEl || !dayEl || !slotEl) return;
+
+    let originalBtnHtml = '';
+    if (submitBtn) {
+        originalBtnHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating Attendance...';
+    }
 
     const subjectVal = subjectEl ? subjectEl.value.trim() : '';
 
@@ -182,6 +190,7 @@ function runPrediction(event) {
         department: deptEl.value,
         day: dayEl.value,
         time_slot: slotEl.value,
+        period: slotEl.value,
         semester_week: parseInt(weekEl ? weekEl.value : 10) || 10,
         historical_attendance: parseFloat(historyEl ? historyEl.value : 80.0) || 80.0,
         exam_proximity: parseInt(examEl ? examEl.value : 0) || 0,
@@ -194,9 +203,16 @@ function runPrediction(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+    })
     .then(data => {
         const card = document.getElementById('pred-result-card');
+        if (card) {
+            card.style.display = 'block';
+        }
+
         const periodTimeMap = {
             'P1': '09:00 - 10:00',
             'P2': '10:00 - 11:00',
@@ -284,7 +300,19 @@ function runPrediction(event) {
             slot: payload.time_slot
         };
     })
-    .catch(err => console.error("Prediction error:", err));
+    .catch(err => {
+        console.error("Prediction error:", err);
+        const card = document.getElementById('pred-result-card');
+        if (card) {
+            card.style.display = 'block';
+        }
+    })
+    .finally(() => {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml || '<i class="fa-solid fa-wand-magic-sparkles"></i> Predict Expected Attendance';
+        }
+    });
 }
 
 function onSelectUploadedClass(selectEl) {
@@ -880,7 +908,8 @@ function runEventPrediction(event) {
         document.getElementById('evt-explanation').innerText = data.explanation;
 
         if (data.best_venue) {
-            document.getElementById('evt-venue-name').innerText = `${data.best_venue.room_id} (${data.best_venue.room_type})`;
+            const bestType = (data.best_venue.room_id && data.best_venue.room_id.toLowerCase().includes('lab')) ? 'Lab' : data.best_venue.room_type;
+            document.getElementById('evt-venue-name').innerText = `${data.best_venue.room_id} (${bestType})`;
             document.getElementById('evt-venue-details').innerText = `${data.best_venue.capacity} total seats • Floor ${data.best_venue.floor}, ${data.best_venue.building} • ${data.best_venue.unused_seats >= 0 ? data.best_venue.unused_seats + ' spare seats' : Math.abs(data.best_venue.unused_seats) + ' seat shortage'}`;
 
             // Populate the interactive venue fixer dropdown
@@ -890,7 +919,8 @@ function runEventPrediction(event) {
                 data.all_venues.forEach(v => {
                     const statusTag = v.is_fit ? `(Fits • +${v.diff} spare)` : `(Short • ${Math.abs(v.diff)} deficit)`;
                     const isSelected = v.room_id === data.best_venue.room_id ? 'selected' : '';
-                    optionsHtml += `<option value="${escapeHtml(v.room_id)}" ${isSelected}>${escapeHtml(v.room_id)} — ${escapeHtml(v.room_type)} (${v.capacity} seats) ${statusTag}</option>`;
+                    const vType = (v.room_id && v.room_id.toLowerCase().includes('lab')) ? 'Lab' : v.room_type;
+                    optionsHtml += `<option value="${escapeHtml(v.room_id)}" ${isSelected}>${escapeHtml(v.room_id)} — ${escapeHtml(vType)} (${v.capacity} seats) ${statusTag}</option>`;
                 });
                 selector.innerHTML = optionsHtml;
             }
@@ -953,7 +983,8 @@ function onFixedVenueSelectorChanged(selectedRoomId) {
     }
 
     if (matched) {
-        document.getElementById('evt-venue-name').innerText = `${matched.room_id} (${matched.room_type})`;
+        const mType = (matched.room_id && matched.room_id.toLowerCase().includes('lab')) ? 'Lab' : matched.room_type;
+        document.getElementById('evt-venue-name').innerText = `${matched.room_id} (${mType})`;
         document.getElementById('evt-venue-details').innerText = `${matched.capacity} total seats • Floor ${matched.floor}, ${matched.building} • ${matched.diff >= 0 ? matched.diff + ' spare seats' : Math.abs(matched.diff) + ' seat shortage'}`;
 
         if (statusBox) {

@@ -19,8 +19,8 @@ def inspect_data(df):
     """
     total_rows = len(df)
     total_cols = len(df.columns)
-    missing_count = int(df.isnull().sum().sum())
-    missing_by_col = df.isnull().sum().to_dict()
+    missing_by_col = {col: int(v) for col, v in df.isnull().sum().to_dict().items()}
+    missing_count = sum(missing_by_col.values())
     duplicate_count = int(df.duplicated().sum())
     
     dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}

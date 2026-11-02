@@ -43,6 +43,19 @@ seed_demo_data_if_empty()
 
 # Global state to hold uploaded data metadata across requests
 _uploaded_summary = None
+_cached_dataset_info = None
+
+def load_dataset_file(filepath):
+    """Ultra-fast dataset loader using Rust-based calamine for Excel and low_memory C parser for CSV."""
+    if filepath.endswith(('.xlsx', '.xls')):
+        try:
+            return pd.read_excel(filepath, engine='calamine')
+        except Exception:
+            return pd.read_excel(filepath)
+    elif filepath.endswith('.csv'):
+        return pd.read_csv(filepath, low_memory=False)
+    else:
+        raise ValueError("Unsupported format. Please upload CSV or Excel (.xlsx).")
 
 # ==============================================================================
 # PAGE 1: Home / AI Resource Assistant
@@ -96,13 +109,7 @@ def upload():
         file.save(filepath)
 
         try:
-            if filename.endswith('.csv'):
-                df = pd.read_csv(filepath)
-            elif filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(filepath)
-            else:
-                flash("Unsupported file format. Please upload CSV or Excel.", "danger")
-                return redirect(request.url)
+            df = load_dataset_file(filepath)
 
             # Inspect data
             inspection = inspect_data(df)
@@ -133,10 +140,7 @@ def clean_data():
 
     filepath = _uploaded_summary['filepath']
     try:
-        if filepath.endswith('.csv'):
-            df = pd.read_csv(filepath)
-        else:
-            df = pd.read_excel(filepath)
+        df = load_dataset_file(filepath)
 
         cleaned_df, steps = clean_college_dataset(df)
         
@@ -184,12 +188,7 @@ def api_upload():
     file.save(filepath)
 
     try:
-        if filename.endswith('.csv'):
-            df = pd.read_csv(filepath)
-        elif filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(filepath)
-        else:
-            return jsonify({'success': False, 'error': 'Unsupported format. Please upload CSV or Excel (.xlsx).'}), 400
+        df = load_dataset_file(filepath)
 
         inspection = inspect_data(df)
         
@@ -228,10 +227,7 @@ def api_clean():
         filepath = 'SmartOccupy_5000_Corrected_Dataset.xlsx'
 
     try:
-        if filepath.endswith('.csv'):
-            df = pd.read_csv(filepath)
-        else:
-            df = pd.read_excel(filepath)
+        df = load_dataset_file(filepath)
 
         cleaned_df, steps = clean_college_dataset(df)
         cleaned_filename = 'cleaned_' + os.path.basename(filepath)
@@ -268,12 +264,16 @@ def api_clean():
 @app.route('/api/dataset', methods=['GET'])
 def api_dataset():
     """Returns active dataset information and live preview records from SmartOccupy_5000."""
+    global _cached_dataset_info
+    if _cached_dataset_info is not None:
+        return jsonify(_cached_dataset_info)
+
     try:
         filepath = 'SmartOccupy_5000_Corrected_Dataset.xlsx'
         if os.path.exists(filepath):
-            df = pd.read_excel(filepath)
+            df = load_dataset_file(filepath)
         elif os.path.exists('data/attendance.csv'):
-            df = pd.read_csv('data/attendance.csv')
+            df = load_dataset_file('data/attendance.csv')
         else:
             return jsonify({'success': False, 'error': 'Dataset not found'}), 404
 
@@ -283,7 +283,7 @@ def api_dataset():
                 preview_df[col] = preview_df[col].astype(str)
         preview_records = preview_df.replace({np.nan: ''}).to_dict(orient='records')
 
-        return jsonify({
+        _cached_dataset_info = {
             'success': True,
             'filename': 'SmartOccupy_5000_Corrected_Dataset.xlsx',
             'total_rows': int(len(df)),
@@ -293,7 +293,8 @@ def api_dataset():
             'duplicate_rows': int(df.duplicated().sum()),
             'preview': preview_records,
             'isCleaned': True
-        })
+        }
+        return jsonify(_cached_dataset_info)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -828,6 +829,9 @@ def events():
     cursor.execute("SELECT room_id, building, floor, capacity, room_type FROM classrooms WHERE available = 'Yes' ORDER BY capacity ASC")
     all_classrooms = [dict(r) for r in cursor.fetchall()]
     conn.close()
+    for c in all_classrooms:
+        if 'lab' in c['room_id'].lower():
+            c['room_type'] = 'Lab'
     return render_template('events.html', events=scheduled_events, classrooms=all_classrooms)
 
 @app.route('/api/predict-event', methods=['POST'])

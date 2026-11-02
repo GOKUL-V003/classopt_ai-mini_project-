@@ -67,7 +67,7 @@ const CLASSROOMS = [
   { room_id: 'R103', building: 'Academic Block A', floor: 1, capacity: 50, room_type: 'Classroom', projector: 'Yes', lab: 'No', available: 'Yes' },
   { room_id: 'R104', building: 'Academic Block A', floor: 1, capacity: 60, room_type: 'Classroom', projector: 'Yes', lab: 'No', available: 'Yes' },
   { room_id: 'R105', building: 'Academic Block A', floor: 1, capacity: 75, room_type: 'Classroom', projector: 'Yes', lab: 'No', available: 'Yes' },
-  { room_id: 'R201', building: 'Academic Block B', floor: 2, capacity: 90, room_type: 'Classroom', projector: 'Yes', lab: 'Yes', available: 'Yes' },
+  { room_id: 'R201', building: 'Academic Block B', floor: 2, capacity: 90, room_type: 'Lab', projector: 'Yes', lab: 'Yes', available: 'Yes' },
   { room_id: 'R202', building: 'Academic Block B', floor: 2, capacity: 100, room_type: 'Seminar Hall', projector: 'Yes', lab: 'No', available: 'Yes' },
   { room_id: 'R203', building: 'Academic Block B', floor: 2, capacity: 120, room_type: 'Lecture Hall', projector: 'Yes', lab: 'No', available: 'Yes' },
   { room_id: 'R204', building: 'Academic Block B', floor: 2, capacity: 150, room_type: 'Lecture Hall', projector: 'Yes', lab: 'No', available: 'Yes' }
@@ -280,7 +280,20 @@ export default function Home() {
     exam: '0',
     actual_students: 61
   });
-  const [predResult, setPredResult] = useState(null);
+  const [predResult, setPredResult] = useState({
+    predicted_students: 64,
+    min_capacity: 70,
+    buffer_seats: 6,
+    actual_students: 61,
+    difference: 3,
+    accuracy_percent: 95.1,
+    factors: [
+      'Department Baseline: AIDS historical turnout rate is 87.14%',
+      'Day Effect: Wednesday (Standard weekday pattern)',
+      'Time Slot: Period P1 (09:00 - 10:00)',
+      'Exam Proximity: Normal semester routine'
+    ]
+  });
   const [tableSearch, setTableSearch] = useState('');
   const [tableDept, setTableDept] = useState('All');
   const [tableSlot, setTableSlot] = useState('All');
@@ -2137,7 +2150,7 @@ export default function Home() {
                     <tr>
                       <th>Event Name</th>
                       <th>Type</th>
-                      <th>Date</th>
+                      <th style={{ minWidth: '130px', whiteSpace: 'nowrap' }}>Date</th>
                       <th>Registrations</th>
                       <th>Expected Attendance</th>
                       <th>Allocated Venue</th>
@@ -2154,11 +2167,28 @@ export default function Home() {
                       <tr key={idx}>
                         <td><strong>{e.event_name}</strong></td>
                         <td>{e.event_type}</td>
-                        <td>{e.date}</td>
+                        <td style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{e.date}</td>
                         <td>{e.registrations} students</td>
                         <td><strong>{e.attendance}</strong> seats</td>
-                        <td><span className="badge badge-primary">{e.room}</span></td>
-                        <td><span className="badge badge-success">{e.status}</span></td>
+                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{e.room}</td>
+                        <td style={{ fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.35, color: e.status === 'Pending Approval' ? '#d97706' : '#15803d' }}>
+                          {e.status && e.status.includes('(') ? (
+                            <>
+                              {e.status.split('(')[0].trim() && (
+                                <div style={{ whiteSpace: 'nowrap' }}>{e.status.split('(')[0].trim()}</div>
+                              )}
+                              <div style={{ whiteSpace: 'nowrap', fontSize: '0.76rem', fontWeight: 500, marginTop: '2px' }}>
+                                {e.status.includes('Fixed') && <i className="fa-solid fa-lock" style={{ marginRight: '3px' }}></i>}
+                                ({e.status.split('(')[1]}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ whiteSpace: 'nowrap' }}>
+                              {e.status && e.status.includes('Fixed') && <i className="fa-solid fa-lock" style={{ marginRight: '3px' }}></i>}
+                              {e.status}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2240,7 +2270,7 @@ export default function Home() {
                     <div className="card-header">
                       <div>
                         <span className="badge badge-primary" style={{ marginBottom: '0.35rem' }}>Venue Allocation Result</span>
-                        <h3 style={{ color: 'var(--accent)' }}>{eventResult.venue.room_id} ({eventResult.venue.room_type})</h3>
+                        <h3 style={{ color: 'var(--accent)' }}>{eventResult.venue.room_id} ({(eventResult.venue.room_id && eventResult.venue.room_id.toLowerCase().includes('lab')) ? 'Lab' : eventResult.venue.room_type})</h3>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                           Capacity: {eventResult.venue.capacity} seats • Floor {eventResult.venue.floor}, {eventResult.venue.building}
                         </p>

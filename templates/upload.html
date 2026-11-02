@@ -28,7 +28,7 @@
             <h3><i class="fa-solid fa-file-import" style="color: var(--primary);"></i> Upload College Dataset</h3>
             <span class="badge badge-primary">Excel or CSV</span>
         </div>
-        <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" onsubmit="var btn=document.getElementById('btn-upload-submit'); if(btn){btn.disabled=true; btn.innerHTML='<i class=\'fa-solid fa-spinner fa-spin\'></i> Uploading & Syncing...'};">
             <div class="form-group">
                 <label class="form-label">Select Dataset File (.xlsx, .csv)</label>
                 <input type="file" name="dataset_file" class="form-control" accept=".csv, .xlsx, .xls" required>
@@ -37,7 +37,7 @@
                 </small>
             </div>
             <div style="display: flex; gap: 0.75rem;">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" id="btn-upload-submit" class="btn btn-primary">
                     <i class="fa-solid fa-upload"></i> Upload & Inspect
                 </button>
             </div>
@@ -87,8 +87,8 @@
         </div>
         <div>
             {% if not summary.cleaned %}
-            <form action="{{ url_for('clean_data') }}" method="POST">
-                <button type="submit" class="btn btn-success">
+            <form action="{{ url_for('clean_data') }}" method="POST" onsubmit="var btn=document.getElementById('btn-clean-submit'); if(btn){btn.disabled=true; btn.innerHTML='<i class=\'fa-solid fa-spinner fa-spin\'></i> Cleaning Data...'};">
+                <button type="submit" id="btn-clean-submit" class="btn btn-success">
                     <i class="fa-solid fa-broom"></i> Clean Data
                 </button>
             </form>

@@ -34,7 +34,7 @@
                 <tr>
                     <th>Event Name</th>
                     <th>Type</th>
-                    <th>Date</th>
+                    <th style="min-width: 130px; white-space: nowrap;">Date</th>
                     <th>Registrations</th>
                     <th>Expected Attendance</th>
                     <th>Allocated Venue</th>
@@ -47,15 +47,23 @@
                 <tr>
                     <td><strong>{{ e.event_name }}</strong></td>
                     <td>{{ e.event_type }}</td>
-                    <td>{{ e.date }}</td>
+                    <td style="white-space: nowrap; font-weight: 500;">{{ e.date }}</td>
                     <td>{{ e.registration_count }} students</td>
                     <td><strong>{{ e.predicted_attendance }}</strong> seats</td>
-                    <td><span class="badge badge-primary">{{ e.allocated_room_id }}</span></td>
-                    <td>
-                        {% if 'Fixed' in e.status %}
-                        <span class="badge badge-success"><i class="fa-solid fa-lock"></i> {{ e.status }}</span>
+                    <td style="font-weight: 600; color: var(--primary);">{{ e.allocated_room_id }}</td>
+                    <td style="font-weight: 600; font-size: 0.85rem; line-height: 1.35; color: {% if 'Pending' in e.status %}#d97706{% elif 'Cancel' in e.status %}#dc2626{% else %}#15803d{% endif %};">
+                        {% if '(' in e.status %}
+                            {% set status_parts = e.status.split('(') %}
+                            {% if status_parts[0]|trim %}
+                            <div style="white-space: nowrap;">{{ status_parts[0]|trim }}</div>
+                            {% endif %}
+                            <div style="white-space: nowrap; font-size: 0.76rem; font-weight: 500; margin-top: 2px;">
+                                {% if 'Fixed' in e.status %}<i class="fa-solid fa-lock" style="margin-right: 4px;"></i>{% endif %}({{ status_parts[1] }}
+                            </div>
                         {% else %}
-                        <span class="badge badge-success">{{ e.status }}</span>
+                            <div style="white-space: nowrap;">
+                                {% if 'Fixed' in e.status %}<i class="fa-solid fa-lock" style="margin-right: 4px;"></i>{% endif %}{{ e.status }}
+                            </div>
                         {% endif %}
                     </td>
                     <td>
@@ -145,7 +153,7 @@
                     <option value="auto" selected>✨ Auto-Select Best Fit (Optimizer Recommends)</option>
                     {% for c in classrooms %}
                     <option value="{{ c.room_id }}">
-                        {{ c.room_id }} — {{ c.room_type }} ({{ c.capacity }} seats, Floor {{ c.floor }}, {{ c.building }})
+                        {{ c.room_id }} — {% if 'lab' in c.room_id|lower %}Lab{% else %}{{ c.room_type }}{% endif %} ({{ c.capacity }} seats, Floor {{ c.floor }}, {{ c.building }})
                     </option>
                     {% endfor %}
                 </select>
@@ -247,7 +255,7 @@
                 <select id="modal-fix-venue-dropdown" class="form-select">
                     {% for c in classrooms %}
                     <option value="{{ c.room_id }}">
-                        {{ c.room_id }} — {{ c.room_type }} ({{ c.capacity }} seats, Floor {{ c.floor }}, {{ c.building }})
+                        {{ c.room_id }} — {% if 'lab' in c.room_id|lower %}Lab{% else %}{{ c.room_type }}{% endif %} ({{ c.capacity }} seats, Floor {{ c.floor }}, {{ c.building }})
                     </option>
                     {% endfor %}
                 </select>

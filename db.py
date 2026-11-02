@@ -120,6 +120,9 @@ def init_db():
     )
     ''')
 
+    # Ensure any room whose room_id or text contains 'LAB' has room_type='Lab' and lab_available='Yes'
+    cursor.execute("UPDATE classrooms SET room_type = 'Lab', lab_available = 'Yes' WHERE UPPER(room_id) LIKE '%LAB%'")
+
     conn.commit()
     conn.close()
 
@@ -244,8 +247,10 @@ def sync_dataset_to_db(df):
             col_map[col] = 'building'
         elif c in ['floor', 'level']:
             col_map[col] = 'floor'
-        elif c in ['room_type', 'type', 'room type']:
+        elif c in ['room_type', 'type', 'room type', 'resource type', 'resource_type']:
             col_map[col] = 'room_type'
+        elif c in ['subject_type', 'subject type', 'course_type']:
+            col_map[col] = 'subject_type'
         elif c in ['projector_available', 'projector', 'has_projector']:
             col_map[col] = 'projector_available'
         elif c in ['lab_available', 'lab', 'has_lab', 'is_lab']:
@@ -285,6 +290,10 @@ def sync_dataset_to_db(df):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # High-performance SQLite write settings
+    cursor.execute("PRAGMA synchronous = OFF")
+    cursor.execute("PRAGMA journal_mode = MEMORY")
+
     is_classrooms_only = ('room_id' in norm_df.columns and 'capacity' in norm_df.columns and 
                           'time_slot' not in norm_df.columns and 'subject' not in norm_df.columns and 
                           'actual_students' not in norm_df.columns)
@@ -292,19 +301,30 @@ def sync_dataset_to_db(df):
     if is_classrooms_only:
         # User uploaded standalone classroom master file
         cursor.execute("DELETE FROM classrooms")
-        for _, r in norm_df.iterrows():
+        rooms_batch = []
+        for r in norm_df.to_dict('records'):
             rid = str(r['room_id']).strip()
-            cap = int(r.get('capacity', 60))
-            bld = str(r.get('building', 'Main Block'))
-            fl = int(r.get('floor', 1))
-            rtype = str(r.get('room_type', 'Lecture Hall' if cap >= 120 else ('Seminar Hall' if cap >= 80 else 'Classroom')))
+            cap = int(r.get('capacity', 60)) if pd.notnull(r.get('capacity')) else 60
+            bld = str(r.get('building', 'Main Block')) if pd.notnull(r.get('building')) else 'Main Block'
+            fl = int(r.get('floor', 1)) if pd.notnull(r.get('floor')) else 1
+            raw_rtype = str(r.get('room_type', '')).strip()
+            if 'lab' in rid.lower() or 'lab' in str(r.get('subject_type', '')).lower() or raw_rtype.lower() == 'lab':
+                rtype = 'Lab'
+                lab = 'Yes'
+            elif raw_rtype and raw_rtype.lower() != 'nan':
+                rtype = raw_rtype
+                lab = 'Yes' if str(r.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
+            else:
+                rtype = 'Lecture Hall' if cap >= 120 else ('Seminar Hall' if cap >= 80 else 'Classroom')
+                lab = 'Yes' if str(r.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
             proj = 'Yes' if str(r.get('projector_available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
-            lab = 'Yes' if str(r.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
             avail = 'Yes' if str(r.get('available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
-            cursor.execute('''
-                INSERT OR REPLACE INTO classrooms (room_id, building, floor, capacity, room_type, projector_available, lab_available, available)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (rid, bld, fl, cap, rtype, proj, lab, avail))
+            rooms_batch.append((rid, bld, fl, cap, rtype, proj, lab, avail))
+
+        cursor.executemany('''
+            INSERT OR REPLACE INTO classrooms (room_id, building, floor, capacity, room_type, projector_available, lab_available, available)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', rooms_batch)
         conn.commit()
         conn.close()
         return {'success': True, 'records': len(norm_df), 'type': 'classrooms'}
@@ -312,28 +332,33 @@ def sync_dataset_to_db(df):
     # If dataset has room_id, extract unique classrooms and sync classrooms table
     if 'room_id' in norm_df.columns:
         cursor.execute("DELETE FROM classrooms")
-        unique_rooms = norm_df[['room_id']].drop_duplicates()
-        for _, r_unique in unique_rooms.iterrows():
-            rid = str(r_unique['room_id']).strip()
-            sub = norm_df[norm_df['room_id'] == r_unique['room_id']]
-            first_row = sub.iloc[0]
-            cap_val = 60
-            if 'capacity' in norm_df.columns:
-                try:
-                    cap_val = int(first_row['capacity'])
-                except (ValueError, TypeError):
-                    cap_val = 60
-            bld_val = str(first_row.get('building', 'Main Block'))
+        req_cols = [c for c in ['room_id', 'capacity', 'building', 'room_type', 'subject_type', 'lab_available', 'projector_available', 'available'] if c in norm_df.columns]
+        unique_rooms_df = norm_df[req_cols].drop_duplicates(subset=['room_id'])
+        rooms_batch = []
+        for r in unique_rooms_df.to_dict('records'):
+            rid = str(r['room_id']).strip()
+            cap_val = int(r.get('capacity', 60)) if pd.notnull(r.get('capacity')) else 60
+            bld_val = str(r.get('building', 'Main Block')) if pd.notnull(r.get('building')) else 'Main Block'
             m = re.search(r'\d+', rid)
             fl_val = int(m.group(0)[0]) if m and len(m.group(0)) >= 2 else 1
-            rtype_val = str(first_row.get('room_type', 'Lecture Hall' if cap_val >= 120 else ('Seminar Hall' if cap_val >= 80 else 'Classroom')))
-            proj_val = 'Yes' if str(first_row.get('projector_available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
-            lab_val = 'Yes' if str(first_row.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
-            avail_val = 'Yes' if str(first_row.get('available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
-            cursor.execute('''
-                INSERT OR REPLACE INTO classrooms (room_id, building, floor, capacity, room_type, projector_available, lab_available, available)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (rid, bld_val, fl_val, cap_val, rtype_val, proj_val, lab_val, avail_val))
+            raw_rtype = str(r.get('room_type', '')).strip()
+            if 'lab' in rid.lower() or 'lab' in str(r.get('subject_type', '')).lower() or raw_rtype.lower() == 'lab':
+                rtype_val = 'Lab'
+                lab_val = 'Yes'
+            elif raw_rtype and raw_rtype.lower() != 'nan':
+                rtype_val = raw_rtype
+                lab_val = 'Yes' if str(r.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
+            else:
+                rtype_val = 'Lecture Hall' if cap_val >= 120 else ('Seminar Hall' if cap_val >= 80 else 'Classroom')
+                lab_val = 'Yes' if str(r.get('lab_available', 'No')).strip().lower() in ['yes', '1', 'true'] else 'No'
+            proj_val = 'Yes' if str(r.get('projector_available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
+            avail_val = 'Yes' if str(r.get('available', 'Yes')).strip().lower() in ['yes', '1', 'true'] else 'No'
+            rooms_batch.append((rid, bld_val, fl_val, cap_val, rtype_val, proj_val, lab_val, avail_val))
+
+        cursor.executemany('''
+            INSERT OR REPLACE INTO classrooms (room_id, building, floor, capacity, room_type, projector_available, lab_available, available)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', rooms_batch)
 
     # Synchronize attendance and timetable tables
     cursor.execute("DELETE FROM attendance")
@@ -341,66 +366,56 @@ def sync_dataset_to_db(df):
 
     # If section column is missing or all rows have identical values,
     # automatically assign distinct sections (Sec A, Sec B, Sec C, Sec D)
-    # so parallel sessions running at the same period are clearly identified
-    # as distinct student batches/classes rather than showing the same single section
     if 'section' not in norm_df.columns or norm_df['section'].nunique() <= 1:
         sec_letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-        norm_df['section'] = norm_df.groupby(['date', 'department', 'time_slot']).cumcount().apply(
+        norm_df['section'] = norm_df.groupby(['date', 'department', 'time_slot']).cumcount().map(
             lambda i: sec_letters[i] if i < len(sec_letters) else chr(65 + i)
         )
 
-    att_batch = []
-    tt_batch = []
+    # Fast vectorized column-level extraction (avoids 100x slower iterrows)
+    n = len(norm_df)
+    sess_ids = [str(x).strip() if pd.notnull(x) else f'SESS_{i+1:04d}' for i, x in enumerate(norm_df['session_id'].tolist() if 'session_id' in norm_df.columns else [None]*n)]
+    dates = [str(x)[:10] if pd.notnull(x) else '2026-09-01' for x in (norm_df['date'].tolist() if 'date' in norm_df.columns else ['2026-09-01']*n)]
+    days = [str(x) if pd.notnull(x) else 'Monday' for x in (norm_df['day'].tolist() if 'day' in norm_df.columns else ['Monday']*n)]
+    time_slots = [str(x).strip() if pd.notnull(x) else 'P1' for x in (norm_df['time_slot'].tolist() if 'time_slot' in norm_df.columns else ['P1']*n)]
+    departments = [str(x).strip() if pd.notnull(x) else 'CSE' for x in (norm_df['department'].tolist() if 'department' in norm_df.columns else ['CSE']*n)]
+    years = [int(x) if pd.notnull(x) and str(x).isdigit() else 3 for x in (norm_df['year'].tolist() if 'year' in norm_df.columns else [3]*n)]
+    sections = [str(x).strip() if pd.notnull(x) else 'A' for x in (norm_df['section'].tolist() if 'section' in norm_df.columns else ['A']*n)]
+    subjects = [str(x).strip() if pd.notnull(x) else 'Core Subject' for x in (norm_df['subject'].tolist() if 'subject' in norm_df.columns else ['Core Subject']*n)]
+    faculties = [str(x).strip() if pd.notnull(x) else 'Faculty Member' for x in (norm_df['faculty'].tolist() if 'faculty' in norm_df.columns else ['Faculty Member']*n)]
+    room_ids = [str(x).strip() if pd.notnull(x) else 'R101' for x in (norm_df['room_id'].tolist() if 'room_id' in norm_df.columns else ['R101']*n)]
 
-    for idx, r in norm_df.iterrows():
-        sess_id = str(r.get('session_id', f'SESS_{idx+1:04d}')).strip()
-        dt_raw = str(r.get('date', '2026-09-01'))[:10]
-        dy_raw = str(r.get('day', 'Monday'))
-        ts_raw = str(r.get('time_slot', 'P1')).strip()
-        dept_raw = str(r.get('department', 'CSE')).strip()
-        try:
-            yr_raw = int(r.get('year', 3))
-        except (ValueError, TypeError):
-            yr_raw = 3
-        sec_raw = str(r.get('section', 'A')).strip()
-        subj_raw = str(r.get('subject', 'Core Subject')).strip()
-        fac_raw = str(r.get('faculty', 'Faculty Member')).strip()
-        rid_raw = str(r.get('room_id', 'R101')).strip()
+    has_act = 'actual_students' in norm_df.columns
+    has_exp = 'expected_students' in norm_df.columns
+    raw_acts = norm_df['actual_students'].tolist() if has_act else [None]*n
+    raw_exps = norm_df['expected_students'].tolist() if has_exp else [None]*n
+    has_hist = 'historical_attendance' in norm_df.columns
+    raw_hists = norm_df['historical_attendance'].tolist() if has_hist else [None]*n
+    has_exam = 'exam_proximity' in norm_df.columns
+    raw_exams = norm_df['exam_proximity'].tolist() if has_exam else [0]*n
 
-        # Handle student counts
-        has_act = 'actual_students' in norm_df.columns
-        has_exp = 'expected_students' in norm_df.columns
+    exp_vals = []
+    act_vals = []
+    hist_vals = []
+    exam_vals = []
 
-        try:
-            act_val = int(r['actual_students']) if has_act and pd.notnull(r['actual_students']) else None
-        except (ValueError, TypeError):
-            act_val = None
+    for i in range(n):
+        a = int(raw_acts[i]) if (has_act and pd.notnull(raw_acts[i])) else None
+        e = int(raw_exps[i]) if (has_exp and pd.notnull(raw_exps[i])) else None
+        if a is None and e is not None: a = e
+        elif e is None and a is not None: e = a
+        elif a is None and e is None: a, e = 50, 55
+        act_vals.append(a)
+        exp_vals.append(e)
+        
+        h = float(raw_hists[i]) if (has_hist and pd.notnull(raw_hists[i])) else (round((a / e) * 100, 1) if e > 0 else 75.0)
+        hist_vals.append(h)
+        
+        ex = int(raw_exams[i]) if (has_exam and pd.notnull(raw_exams[i])) else 0
+        exam_vals.append(ex)
 
-        try:
-            exp_val = int(r['expected_students']) if has_exp and pd.notnull(r['expected_students']) else None
-        except (ValueError, TypeError):
-            exp_val = None
-
-        if act_val is None and exp_val is not None:
-            act_val = exp_val
-        elif exp_val is None and act_val is not None:
-            exp_val = act_val
-        elif act_val is None and exp_val is None:
-            act_val = 50
-            exp_val = 55
-
-        try:
-            hist_val = float(r['historical_attendance']) if 'historical_attendance' in norm_df.columns and pd.notnull(r['historical_attendance']) else round((act_val / exp_val) * 100, 1) if exp_val > 0 else 75.0
-        except (ValueError, TypeError):
-            hist_val = 75.0
-
-        try:
-            exam_val = int(r['exam_proximity']) if 'exam_proximity' in norm_df.columns and pd.notnull(r['exam_proximity']) else 0
-        except (ValueError, TypeError):
-            exam_val = 0
-
-        att_batch.append((sess_id, dt_raw, dy_raw, ts_raw, dept_raw, yr_raw, sec_raw, subj_raw, fac_raw, rid_raw, exp_val, act_val, hist_val, exam_val))
-        tt_batch.append((sess_id, dt_raw, dy_raw, ts_raw, dept_raw, yr_raw, sec_raw, subj_raw, fac_raw, rid_raw))
+    att_batch = list(zip(sess_ids, dates, days, time_slots, departments, years, sections, subjects, faculties, room_ids, exp_vals, act_vals, hist_vals, exam_vals))
+    tt_batch = list(zip(sess_ids, dates, days, time_slots, departments, years, sections, subjects, faculties, room_ids))
 
     cursor.executemany('''
         INSERT INTO attendance (session_id, date, day, time_slot, department, year, section, subject, faculty, room_id, expected_students, actual_students, historical_attendance, exam_proximity)
