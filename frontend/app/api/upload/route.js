@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:5000';
+
 export async function POST(request) {
   try {
     const formData = await request.formData();
@@ -11,12 +13,12 @@ export async function POST(request) {
 
     const filename = file.name || 'uploaded_dataset.csv';
 
-    // Forward to Flask backend if running on 127.0.0.1:5000
+    // Forward to Flask backend if running
     try {
       const flaskFormData = new FormData();
       flaskFormData.append('file', file);
 
-      const flaskRes = await fetch('http://127.0.0.1:5000/api/upload', {
+      const flaskRes = await fetch(`${BACKEND_URL}/api/upload`, {
         method: 'POST',
         body: flaskFormData,
       });

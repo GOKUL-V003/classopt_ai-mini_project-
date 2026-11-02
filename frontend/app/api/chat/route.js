@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:5000';
+
 // Helper function to execute python ai_copilot_cli.py for direct SQLite persistence
 function executePythonCopilot(prompt, apiKey) {
   return new Promise((resolve) => {
@@ -54,7 +56,7 @@ function executePythonCopilot(prompt, apiKey) {
 export async function GET(request) {
   // Return stored AI instructions from SQLite database
   try {
-    const flaskRes = await fetch('http://127.0.0.1:5000/api/ai-chat-instructions?limit=50', { cache: 'no-store' });
+    const flaskRes = await fetch(`${BACKEND_URL}/api/ai-chat-instructions?limit=50`, { cache: 'no-store' });
     if (flaskRes.ok) {
       const data = await flaskRes.json();
       return NextResponse.json(data);
@@ -87,7 +89,7 @@ export async function POST(request) {
     // - events table
     // - ai_chat_instructions table
     try {
-      const flaskRes = await fetch('http://127.0.0.1:5000/api/ai-chat-copilot', {
+      const flaskRes = await fetch(`${BACKEND_URL}/api/ai-chat-copilot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

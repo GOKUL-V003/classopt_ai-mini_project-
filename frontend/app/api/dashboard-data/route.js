@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:5000';
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -9,7 +11,7 @@ export async function GET(request) {
 
     // Forward to Flask backend
     try {
-      const flaskUrl = `http://127.0.0.1:5000/api/dashboard-data?department=${encodeURIComponent(department)}&room_id=${encodeURIComponent(room_id)}&time_slot=${encodeURIComponent(time_slot)}`;
+      const flaskUrl = `${BACKEND_URL}/api/dashboard-data?department=${encodeURIComponent(department)}&room_id=${encodeURIComponent(room_id)}&time_slot=${encodeURIComponent(time_slot)}`;
       const res = await fetch(flaskUrl, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();

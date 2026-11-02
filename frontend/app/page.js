@@ -151,7 +151,7 @@ export default function Home() {
     showToast('Executing Pandas cleaning pipeline (deduplication, date parsing, median imputation)...', 'info');
 
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/clean', {
+      const res = await fetch('/api/clean', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: datasetInfo.filename })
@@ -1695,6 +1695,8 @@ export default function Home() {
                 <div><strong>C5:</strong> Min Unused Capacity</div>
                 <div><strong>C6:</strong> Proximity / Building Fit</div>
               </div>
+            </div>
+
             {/* Active Timetable Sessions Quick-Optimize Table (Primary Table View) */}
             <div className="card" style={{ marginBottom: '2rem' }}>
               <div className="card-header">
@@ -1963,6 +1965,7 @@ export default function Home() {
                 <button onClick={() => setActiveTab('dashboard')} className="btn btn-secondary">
                   <i className="fa-solid fa-chart-pie"></i> View Analytics Dashboard
                 </button>
+              </div>
             </div>
 
             {/* Reallocated Sessions Simulation Table (Primary Table View) */}
